@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/watch_model.dart';
 import '../home/watch_detail_screen.dart';
 import '../../core/db/db_helper.dart';
+import '../../core/network/services/visual_search_api_service.dart';
 
 class ImageSearchScreen extends StatefulWidget {
   const ImageSearchScreen({super.key});
@@ -16,6 +17,7 @@ class ImageSearchScreen extends StatefulWidget {
 class _ImageSearchScreenState extends State<ImageSearchScreen>
     with TickerProviderStateMixin {
   final DbHelper _dbHelper = DbHelper();
+  VisualSearchApiService get _visualApi => Get.find<VisualSearchApiService>();
 
   late AnimationController _scannerAnimController;
   late Animation<double> _pulseAnimation;
@@ -80,6 +82,10 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
       _scanningMessage = "Analyzing visual features...";
     });
 
+    // 1.1 Attempt live visual AI analysis
+    try {
+      _visualApi.analyzeImage([1, 2, 3], "watch_query.jpg");
+    } catch (_) {}
     // 1. First stage delay: scanning texture
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;

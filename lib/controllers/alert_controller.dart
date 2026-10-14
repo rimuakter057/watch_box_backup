@@ -2,10 +2,13 @@ import 'package:get/get.dart';
 import '../core/db/db_helper.dart';
 import '../models/alert_model.dart';
 import 'auth_controller.dart';
+import '../core/network/services/alerts_api_service.dart';
+import 'package:flutter/foundation.dart';
 
 class AlertController extends GetxController {
   final DbHelper _dbHelper = DbHelper();
   final AuthController _auth = Get.find<AuthController>();
+  AlertsApiService get _alertsApi => Get.find<AlertsApiService>();
 
   final RxList<AlertModel> alertsList = <AlertModel>[].obs;
   final RxInt unreadCount = 0.obs;
@@ -33,6 +36,18 @@ class AlertController extends GetxController {
     if (user == null || user.id == null) return;
 
     isLoading.value = true;
+    try {
+      final backendNotifications = await _alertsApi.getNotifications();
+      if (backendNotifications != null && backendNotifications.isNotEmpty) {
+        final list = backendNotifications.map((m) => AlertModel.fromMap(m)).toList();
+        alertsList.assignAll(list);
+        unreadCount.value = list.where((a) => !a.isRead).length;
+        isLoading.value = false;
+        return;
+      }
+    } catch (e) {
+      debugPrint("Alerts API offline, fallback to local DB: ");
+    }
     try {
       final db = await _dbHelper.database;
       final List<Map<String, dynamic>> maps = await db.query(
@@ -125,6 +140,9 @@ class AlertController extends GetxController {
   }
 
   Future<void> markAllAsRead() async {
+    try {
+      _alertsApi.markAllAsRead();
+    } catch (_) {}
     final user = _auth.currentUser.value;
     if (user == null || user.id == null) return;
 
@@ -158,6 +176,9 @@ class AlertController extends GetxController {
   }
 
   Future<void> deleteAlert(int alertId) async {
+    try {
+      _alertsApi.deleteNotification(alertId.toString());
+    } catch (_) {}
     try {
       final db = await _dbHelper.database;
       await db.delete(

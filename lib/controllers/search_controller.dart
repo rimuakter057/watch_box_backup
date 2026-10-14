@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../core/db/db_helper.dart';
@@ -7,11 +7,29 @@ import '../core/theme/app_colors.dart';
 import '../models/watch_model.dart';
 import 'auth_controller.dart';
 import 'alert_controller.dart';
+import '../core/network/services/search_api_service.dart';
+import '../core/network/services/listings_api_service.dart';
 
 class WatchSearchController extends GetxController {
   final DbHelper _dbHelper = DbHelper();
   final PrefManager _pref = Get.find<PrefManager>();
   final AuthController _auth = Get.find<AuthController>();
+
+  SearchApiService get _searchApi {
+    try {
+      return Get.find<SearchApiService>();
+    } catch (_) {
+      return SearchApiService();
+    }
+  }
+
+  ListingsApiService get _listingsApi {
+    try {
+      return Get.find<ListingsApiService>();
+    } catch (_) {
+      return ListingsApiService();
+    }
+  }
 
   final RxList<WatchModel> searchResults = <WatchModel>[].obs;
   final RxList<Map<String, dynamic>> searchHistory = <Map<String, dynamic>>[].obs;
@@ -159,6 +177,40 @@ class WatchSearchController extends GetxController {
 
     isLoading.value = true;
     queryText.value = keyword;
+
+    // 1. Live Backend Search with graceful fallback
+    try {
+      List<String> activePlatforms = [];
+      if (searchEbay.value && _pref.ebayEnabled) activePlatforms.add('eBay');
+      if (searchChrono24.value && _pref.chrono24Enabled) activePlatforms.add('Chrono24');
+      if (searchGrailzee.value && _pref.grailzeeEnabled) activePlatforms.add('Grailzee');
+
+      if (activePlatforms.isEmpty) {
+        searchResults.clear();
+        _calculateAnalytics([]);
+        isLoading.value = false;
+        return true;
+      }
+
+      final liveResults = await _searchApi.search(
+        query: keyword,
+        minPrice: filterPriceMin.value,
+        maxPrice: filterPriceMax.value,
+        yearMin: filterYearMin.value,
+        yearMax: filterYearMax.value,
+        platforms: activePlatforms,
+      );
+
+      if (liveResults != null && liveResults.isNotEmpty) {
+        searchResults.assignAll(liveResults);
+        _calculateAnalytics(liveResults);
+        await _logSearch(keyword);
+        isLoading.value = false;
+        return true;
+      }
+    } catch (e) {
+      print("Live search fallback to SQLite: ");
+    }
 
     try {
       final db = await _dbHelper.database;
@@ -417,6 +469,14 @@ class WatchSearchController extends GetxController {
 
   Future<List<WatchModel>> getTraderListings() async {
     try {
+      final liveList = await _listingsApi.getTraderCollections();
+      if (liveList != null && liveList.isNotEmpty) {
+        return liveList;
+      }
+    } catch (e) {
+      print("Live trader listings fallback to SQLite: ");
+    }
+    try {
       final db = await _dbHelper.database;
       final List<Map<String, dynamic>> maps = await db.query(
         'listings',
@@ -432,6 +492,14 @@ class WatchSearchController extends GetxController {
   }
 
   Future<List<WatchModel>> getUserListings({required bool isSold}) async {
+    try {
+      final liveList = await _listingsApi.getMyListings(status: isSold ? 'sold' : 'active');
+      if (liveList != null && liveList.isNotEmpty) {
+        return liveList;
+      }
+    } catch (e) {
+      print("Live user listings fallback to SQLite: ");
+    }
     final user = _auth.currentUser.value;
     if (user == null || user.id == null) return [];
     try {
@@ -460,6 +528,22 @@ class WatchSearchController extends GetxController {
   }) async {
     final user = _auth.currentUser.value;
     if (user == null || user.id == null) return false;
+
+    try {
+      await _listingsApi.createListing({
+        'brand': brand,
+        'model': model,
+        'title': title,
+        'price': price,
+        'year': year,
+        'condition': condition,
+        'location': location,
+        'platform': 'In-App',
+      });
+    } catch (e) {
+      print("Backend createListing sync failed: ");
+    }
+
     try {
       final db = await _dbHelper.database;
       await db.insert('listings', {

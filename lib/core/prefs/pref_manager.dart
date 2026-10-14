@@ -10,6 +10,12 @@ class PrefManager extends GetxService {
   static const String _keyActiveUserRole = 'active_user_role';
   static const String _keyActiveUserPlan = 'active_user_plan';
   
+  // Auth Token & API settings
+  static const String _keyAccessToken = 'auth_access_token';
+  static const String _keyRefreshToken = 'auth_refresh_token';
+  static const String _keyApiBaseUrl = 'api_base_url';
+  static const String _keySelectedCurrency = 'preferred_currency';
+
   // Feature toggles controlled by admin
   static const String _keyFeatureEbay = 'feature_ebay_enabled';
   static const String _keyFeatureChrono24 = 'feature_chrono24_enabled';
@@ -54,6 +60,42 @@ class PrefManager extends GetxService {
     await _prefs.setString(_keyActiveUserPlan, plan);
   }
 
+  // Tokens & API
+  String? get accessToken => _prefs.getString(_keyAccessToken);
+  Future<void> setAccessToken(String? token) async {
+    if (token == null) {
+      await _prefs.remove(_keyAccessToken);
+    } else {
+      await _prefs.setString(_keyAccessToken, token);
+    }
+  }
+
+  String? get refreshToken => _prefs.getString(_keyRefreshToken);
+  Future<void> setRefreshToken(String? token) async {
+    if (token == null) {
+      await _prefs.remove(_keyRefreshToken);
+    } else {
+      await _prefs.setString(_keyRefreshToken, token);
+    }
+  }
+
+  String get apiBaseUrl {
+    final custom = _prefs.getString(_keyApiBaseUrl);
+    if (custom != null && custom.isNotEmpty) return custom;
+    if (GetPlatform.isAndroid) {
+      return 'http://10.0.2.2:4000/api/v1';
+    }
+    return 'http://localhost:4000/api/v1';
+  }
+  Future<void> setApiBaseUrl(String url) async {
+    await _prefs.setString(_keyApiBaseUrl, url);
+  }
+
+  String get preferredCurrency => _prefs.getString(_keySelectedCurrency) ?? 'USD';
+  Future<void> setPreferredCurrency(String curr) async {
+    await _prefs.setString(_keySelectedCurrency, curr);
+  }
+
   // Feature Toggles (Admin Controls)
   bool get ebayEnabled => _prefs.getBool(_keyFeatureEbay) ?? true;
   Future<void> setEbayEnabled(bool enabled) async {
@@ -92,5 +134,7 @@ class PrefManager extends GetxService {
     await _prefs.remove(_keyActiveUserName);
     await _prefs.remove(_keyActiveUserRole);
     await _prefs.remove(_keyActiveUserPlan);
+    await _prefs.remove(_keyAccessToken);
+    await _prefs.remove(_keyRefreshToken);
   }
 }

@@ -1,0 +1,66 @@
+class ApiEndpoints {
+  // Auth
+  static const String login = '/auth/login';
+  static const String register = '/auth/register';
+  static const String refresh = '/auth/refresh';
+  static const String logout = '/auth/logout';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
+  static const String changePassword = '/auth/change-password';
+
+  // Users & Preferences
+  static const String userMe = '/users/me';
+  static const String userPreferences = '/users/me/preferences';
+  static const String userDarkMode = '/users/me/dark-mode';
+  static const String userAvatar = '/users/me/avatar';
+
+  // Search & Discovery
+  static const String search = '/search';
+  static const String searchSuggestions = '/search/suggestions';
+  static const String searchPopular = '/search/popular';
+  static const String searchRecent = '/search/recent';
+  static const String searchFacets = '/search/facets';
+
+  // Visual / Image Search
+  static const String imageSearch = '/image-search';
+  static const String imageSearchVisual = '/image-search/visual';
+  static const String imageSearchRecent = '/image-search/recent';
+  static const String aiAnalyzeImage = '/ai/analyze-image';
+
+  // Watch Models & Catalog
+  static const String brands = '/brands';
+  static const String watchModels = '/watch-models';
+
+  // Listings & Trader Hub
+  static const String listings = '/listings';
+  static const String myListings = '/me/listings';
+  static const String traderCollection = '/trader-collection';
+  static const String traderFeatured = '/trader-collection/featured';
+
+  // Recommendations & Analytics
+  static const String recommendationsHome = '/recommendations/home';
+  static const String recommendationsForYou = '/recommendations/for-you';
+  static const String recommendationsTrending = '/recommendations/trending';
+  static const String analyticsMarketInsights = '/analytics/market-insights';
+  static const String analyticsPriceTrend = '/analytics/watch-models';
+
+  // Bookmarks & Saved Searches
+  static const String savedListings = '/me/saved-listings';
+  static const String savedSearches = '/saved-searches';
+
+  // Notifications & Alerts
+  static const String notifications = '/notifications';
+  static const String notificationsUnreadCount = '/notifications/unread-count';
+  static const String notificationPreferences = '/notification-preferences';
+
+  // Subscriptions & Quota
+  static const String subscriptionPlans = '/subscriptions/plans';
+  static const String subscriptionMe = '/subscriptions/me';
+  static const String subscriptionUsage = '/subscriptions/me/usage';
+  static const String subscriptionChangePlan = '/subscriptions/change-plan';
+  static const String subscriptionCheckout = '/subscriptions/checkout-session';
+
+  // eBay Marketplace
+  static const String ebayStatus = '/ebay/status';
+  static const String ebayDisconnect = '/ebay/disconnect';
+}

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../controllers/alert_controller.dart';
+import '../../../core/theme/app_colors.dart';
 
 class CustomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -15,14 +15,12 @@ class CustomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AlertController alertController = Get.find<AlertController>();
-
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceBg,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: context.isDarkTheme ? 0.25 : 0.06),
+            color: Colors.black.withValues(alpha: context.isDarkTheme ? 0.25 : 0.05),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -37,16 +35,32 @@ class CustomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 66,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(context, 0, Icons.home_filled, Icons.home_outlined, "Home"),
-              _buildNavItem(context, 1, Icons.search_rounded, Icons.search_rounded, "Search"),
-              _buildNavItem(context, 2, Icons.favorite_rounded, Icons.favorite_border_rounded, "Saved"),
-              _buildNavItem(context, 3, Icons.notifications_rounded, Icons.notifications_none_rounded, "Alerts", badgeController: alertController),
-              _buildNavItem(context, 4, Icons.person_rounded, Icons.person_outline_rounded, "Profile"),
+              _buildStandardNavItem(context, 0, Icons.home_rounded, Icons.home_outlined, "Home"),
+              _buildStandardNavItem(context, 1, Icons.search_rounded, Icons.search_rounded, "Search"),
+              _buildCenterListingItem(context, 2),
+              Obx(() {
+                int? badge;
+                if (Get.isRegistered<AlertController>()) {
+                  final c = Get.find<AlertController>().unreadCount.value;
+                  badge = c > 0 ? c : null;
+                } else {
+                  badge = 1;
+                }
+                return _buildStandardNavItem(
+                  context,
+                  3,
+                  Icons.notifications_rounded,
+                  Icons.notifications_none_rounded,
+                  "Alerts",
+                  badgeCount: badge,
+                );
+              }),
+              _buildStandardNavItem(context, 4, Icons.person_rounded, Icons.person_outline_rounded, "Profile"),
             ],
           ),
         ),
@@ -54,13 +68,13 @@ class CustomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(
+  Widget _buildStandardNavItem(
     BuildContext context,
     int index,
     IconData activeIcon,
     IconData inactiveIcon,
     String label, {
-    AlertController? badgeController,
+    int? badgeCount,
   }) {
     final isSelected = currentIndex == index;
 
@@ -68,8 +82,7 @@ class CustomNavBar extends StatelessWidget {
       onTap: () => onTap(index),
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -77,57 +90,89 @@ class CustomNavBar extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                AnimatedScale(
-                  scale: isSelected ? 1.15 : 1.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    isSelected ? activeIcon : inactiveIcon,
-                    color: isSelected ? context.primaryNav : context.textSecondaryColor,
-                    size: 24,
-                  ),
+                Icon(
+                  isSelected ? activeIcon : inactiveIcon,
+                  color: isSelected ? const Color(0xFF07274C) : const Color(0xFF64748B),
+                  size: 24,
                 ),
-                if (badgeController != null)
-                  Obx(() {
-                    final count = badgeController.unreadCount.value;
-                    if (count <= 0) return const SizedBox();
-                    return Positioned(
-                      top: -4,
-                      right: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          color: AppColors.error,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 14,
-                          minHeight: 14,
-                        ),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 7,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
+                if (badgeCount != null && badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(3.5),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        "$badgeCount",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          height: 1,
                         ),
                       ),
-                    );
-                  }),
+                    ),
+                  ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? context.primaryNav : context.textSecondaryColor,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                color: isSelected ? const Color(0xFF07274C) : const Color(0xFF64748B),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Raised Circular Center Button for "Listings"
+  Widget _buildCenterListingItem(BuildContext context, int index) {
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF07274C),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF07274C).withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.storefront_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            "Listings",
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
       ),
     );
   }

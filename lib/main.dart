@@ -18,6 +18,14 @@ import 'views/profile/notifications_screen.dart';
 import 'views/profile/account_settings_screen.dart';
 import 'views/profile/change_password_screen.dart';
 import 'core/db/db_helper.dart';
+import 'core/network/api_client.dart';
+import 'core/network/services/auth_api_service.dart';
+import 'core/network/services/search_api_service.dart';
+import 'core/network/services/visual_search_api_service.dart';
+import 'core/network/services/listings_api_service.dart';
+import 'core/network/services/recommendations_api_service.dart';
+import 'core/network/services/alerts_api_service.dart';
+import 'core/network/services/subscriptions_api_service.dart';
 
 void main() async {
   // Ensure Flutter engine bindings are initialized for SharedPreferences
@@ -111,6 +119,15 @@ void main() async {
     print("Auto-login error: $e");
   }
 
+  // 1.1 Initialize Network API Client & Domain Services
+  Get.put(ApiClient());
+  Get.put(AuthApiService());
+  Get.put(SearchApiService());
+  Get.put(VisualSearchApiService());
+  Get.put(ListingsApiService());
+  Get.put(RecommendationsApiService());
+  Get.put(AlertsApiService());
+  Get.put(SubscriptionsApiService());
   // 2. Pre-instantiate core Controllers for global availability
   Get.put(AuthController());
   Get.put(WatchSearchController());
