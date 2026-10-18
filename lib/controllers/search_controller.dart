@@ -1,4 +1,4 @@
-﻿
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../core/db/db_helper.dart';
@@ -569,6 +569,14 @@ class WatchSearchController extends GetxController {
   Future<bool> buyListing(WatchModel watch, String buyerName) async {
     if (watch.id == null) return false;
     try {
+      // 1. Live backend purchase & mark sold
+      try {
+        await _listingsApi.purchaseListing(watch.id.toString(), price: watch.price, buyerName: buyerName);
+        await _listingsApi.markListingSold(watch.id.toString());
+      } catch (e) {
+        print("Backend purchase sync: $e");
+      }
+
       final db = await _dbHelper.database;
       
       // 1. Mark listing as sold
@@ -632,6 +640,13 @@ class WatchSearchController extends GetxController {
 
   Future<Map<String, dynamic>?> getInvoice(int listingId) async {
     try {
+      // 1. Live API invoice fetch
+      try {
+        final liveInvoice = await _listingsApi.getInvoice(listingId.toString());
+        if (liveInvoice != null && liveInvoice.isNotEmpty) return liveInvoice;
+      } catch (_) {}
+
+      // 2. Local fallback
       final db = await _dbHelper.database;
       final List<Map<String, dynamic>> maps = await db.query(
         'invoices',

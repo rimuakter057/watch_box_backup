@@ -24,13 +24,19 @@ class AuthController extends GetxController {
     _loadUserSession();
   }
 
+  Future<void> restoreSession() async {
+    debugPrint("🔄 [AUTH CONTROLLER] Restoring session via PrefManager / JWT token...");
+    await _loadUserSession();
+  }
+
   Future<void> _loadUserSession() async {
     final activeId = _pref.activeUserId;
-    debugPrint("🔄 [AUTH CONTROLLER] Loading session for active user id: $activeId | token exists: ${_pref.accessToken != null}");
-    if (activeId != null) {
+    final hasToken = _pref.hasToken;
+    debugPrint("🔄 [AUTH CONTROLLER] Loading session -> activeId: $activeId | hasToken: $hasToken");
+    if (hasToken || activeId != null) {
       isLoading.value = true;
       try {
-        // 1. First try live backend profile sync
+        // 1. First try live backend profile sync via stored JWT token
         try {
           debugPrint("📡 [AUTH CONTROLLER] Syncing live profile from backend for user session...");
           final profileUser = await fetchProfile();
@@ -42,35 +48,36 @@ class AuthController extends GetxController {
           debugPrint("⚠️ [AUTH CONTROLLER] Live profile sync failed, falling back to SQLite: $e");
         }
 
-        // 2. Fallback to local SQLite session
-        final db = await _dbHelper.database;
-        final List<Map<String, dynamic>> maps = await db.query(
-          'users',
-          where: 'id = ?',
-          whereArgs: [activeId],
-        );
-        if (maps.isNotEmpty) {
-          final user = UserModel.fromMap(maps.first).copyWith(
-            email: _pref.activeUserEmail,
-            backendId: _pref.activeUserBackendId,
-            phone: _pref.activeUserPhone,
-            country: _pref.activeUserCountry,
-            avatarUrl: _pref.activeUserAvatarUrl,
-            currency: _pref.preferredCurrency,
-            darkMode: _pref.isDarkMode,
+        // 2. Fallback to local SQLite session if activeId is present
+        if (activeId != null) {
+          final db = await _dbHelper.database;
+          final List<Map<String, dynamic>> maps = await db.query(
+            'users',
+            where: 'id = ?',
+            whereArgs: [activeId],
           );
-          if (user.isActive) {
-            currentUser.value = user;
-            await _pref.setActiveUserRole(user.role);
-            await _pref.setActiveUserPlan(user.plan);
-            debugPrint("📦 [AUTH CONTROLLER] Loaded session from local SQLite: ${user.name} | Role: ${user.role} | Plan: ${user.plan}");
+          if (maps.isNotEmpty) {
+            final user = UserModel.fromMap(maps.first).copyWith(
+              email: _pref.activeUserEmail,
+              backendId: _pref.activeUserBackendId,
+              phone: _pref.activeUserPhone,
+              country: _pref.activeUserCountry,
+              avatarUrl: _pref.activeUserAvatarUrl,
+              currency: _pref.preferredCurrency,
+              darkMode: _pref.isDarkMode,
+            );
+            if (user.isActive) {
+              currentUser.value = user;
+              await _pref.setActiveUserRole(user.role);
+              await _pref.setActiveUserPlan(user.plan);
+              debugPrint("📦 [AUTH CONTROLLER] Loaded session from local SQLite: ${user.name} | Role: ${user.role} | Plan: ${user.plan}");
+            } else {
+              debugPrint("⚠️ [AUTH CONTROLLER] Inactive user in local DB -> Logging out.");
+              await logout();
+            }
           } else {
-            debugPrint("⚠️ [AUTH CONTROLLER] Inactive user in local DB -> Logging out.");
-            await logout();
+            debugPrint("⚠️ [AUTH CONTROLLER] User not found in local DB.");
           }
-        } else {
-          debugPrint("⚠️ [AUTH CONTROLLER] User not found in local DB -> Logging out.");
-          await logout();
         }
       } catch (e) {
         debugPrint("❌ [AUTH CONTROLLER] Error loading user session: $e");
@@ -251,29 +258,44 @@ class AuthController extends GetxController {
     return await login(name, role, plan, email: email, password: password);
   }
 
-  // Update Profile: calls PATCH /api/v1/users/me
-  Future<bool> updateProfile({String? displayName, String? phone, String? country}) async {
-    debugPrint("✏️ [AUTH CONTROLLER] Triggering updateProfile: Name=$displayName, Phone=$phone, Country=$country");
+  // Update Profile: calls PATCH /api/v1/users/update-profile or /users/me
+  Future<bool> updateProfile({
+    String? displayName,
+    String? phone,
+    String? country,
+    List<int>? profileImageBytes,
+    String? profileImageName,
+    List<int>? bannerImageBytes,
+    String? bannerImageName,
+  }) async {
+    debugPrint("✏️ [AUTH CONTROLLER] Triggering updateProfile: Name=$displayName, Phone=$phone, Country=$country, HasAvatar=${profileImageBytes != null}");
     isLoading.value = true;
     try {
-      await _authApi.updateProfile(
+      final resData = await _authApi.updateProfile(
         displayName: displayName,
         phone: phone,
         country: country,
+        profileImageBytes: profileImageBytes,
+        profileImageName: profileImageName,
+        bannerImageBytes: bannerImageBytes,
+        bannerImageName: bannerImageName,
       );
 
       final existing = currentUser.value;
       if (existing != null) {
         final newName = displayName ?? existing.name;
+        final newAvatar = resData?['avatarUrl']?.toString() ?? existing.avatarUrl;
         final updatedUser = existing.copyWith(
           name: newName,
           phone: phone ?? existing.phone,
           country: country ?? existing.country,
+          avatarUrl: newAvatar,
         );
         currentUser.value = updatedUser;
         if (displayName != null) await _pref.setActiveUserName(displayName);
         if (phone != null) await _pref.setActiveUserPhone(phone);
         if (country != null) await _pref.setActiveUserCountry(country);
+        if (newAvatar != null) await _pref.setActiveUserAvatarUrl(newAvatar);
 
         // Update local DB
         if (existing.id != null) {
@@ -290,6 +312,38 @@ class AuthController extends GetxController {
       return true;
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  // Verify OTP for email confirmation
+  Future<bool> verifyOtp(String email, String code) async {
+    debugPrint("🔢 [AUTH CONTROLLER] Verifying OTP: $email ($code)");
+    isLoading.value = true;
+    try {
+      final success = await _authApi.verifyOtp(email, code);
+      if (success) {
+        Get.snackbar("Verified", "OTP verified successfully.");
+      } else {
+        Get.snackbar("Verification Failed", "Invalid or expired code.");
+      }
+      return success;
+    } catch (e) {
+      debugPrint("❌ [AUTH CONTROLLER] OTP verification error: $e");
+      Get.snackbar("Error", "Could not verify code.");
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // FCM Token sync (PATCH /api/v1/users/update-fcm-token)
+  Future<bool> updateFcmToken(String fcmToken) async {
+    debugPrint("🔔 [AUTH CONTROLLER] Updating FCM token...");
+    try {
+      return await _authApi.updateFcmToken(fcmToken);
+    } catch (e) {
+      debugPrint("❌ [AUTH CONTROLLER] Error updating FCM token: $e");
+      return false;
     }
   }
 

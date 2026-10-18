@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/theme/app_colors.dart';
 import '../../../controllers/auth_controller.dart';
+import '../../core/network/services/subscriptions_api_service.dart';
 
 class SubscriptionPlansScreen extends StatefulWidget {
   const SubscriptionPlansScreen({super.key});
@@ -12,7 +13,17 @@ class SubscriptionPlansScreen extends StatefulWidget {
 
 class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
   final AuthController _auth = Get.find<AuthController>();
+  SubscriptionsApiService get _subApi => Get.find<SubscriptionsApiService>();
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _subApi.getPlans();
+      _subApi.getMySubscription();
+    } catch (_) {}
+  }
 
   Future<void> _handleAction(String plan) async {
     final user = _auth.currentUser.value;
@@ -22,15 +33,12 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
       _isProcessing = true;
     });
 
-    // Simulated Stripe processing
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    if (mounted) {
-      setState(() {
-        _isProcessing = false;
-      });
-
+    try {
       if (plan == 'paid') {
+        final checkoutUrl = await _subApi.createStripeCheckoutSession('paid');
+        if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+          debugPrint("💳 [SUBSCRIPTION UI] Created Stripe checkout session: $checkoutUrl");
+        }
         await _auth.upgradePlan();
         Get.snackbar(
           "Plan Upgraded!",
@@ -40,6 +48,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
           snackPosition: SnackPosition.BOTTOM,
         );
       } else {
+        await _subApi.changePlan('free');
         await _auth.downgradePlan();
         Get.snackbar(
           "Plan Updated",
@@ -49,12 +58,24 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
           snackPosition: SnackPosition.BOTTOM,
         );
       }
+    } catch (e) {
+      debugPrint("Subscription action error: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   Future<void> _handleRefresh() async {
     setState(() => _isProcessing = true);
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      await _subApi.getMySubscription();
+      await _subApi.getMyTransactions();
+      await _auth.fetchProfile();
+    } catch (_) {}
     if (mounted) {
       setState(() => _isProcessing = false);
       Get.snackbar(

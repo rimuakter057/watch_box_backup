@@ -139,11 +139,22 @@ class ApiClient extends GetConnect {
     }
   }
 
-  Future<Response<T>> safeUpload<T>(String url, List<int> imageBytes, String filename, {Map<String, String>? fields}) async {
+  Future<Response<T>> safePut<T>(String url, dynamic body) async {
+    debugPrint("🌐 [API FETCH CALL] safePut: $url | Payload: $body");
+    try {
+      final res = await put<T>(url, body);
+      return res;
+    } catch (e) {
+      debugPrint("❌ [API CLIENT PUT ERROR] [$url]: $e");
+      return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
+    }
+  }
+
+  Future<Response<T>> safeUpload<T>(String url, List<int> imageBytes, String filename, {String fieldName = 'image', Map<String, String>? fields}) async {
     debugPrint("🌐 [API FETCH CALL] safeUpload: $url | File: $filename (${imageBytes.length} bytes)");
     try {
       final form = FormData({
-        'image': MultipartFile(imageBytes, filename: filename),
+        fieldName: MultipartFile(imageBytes, filename: filename),
         ...?fields,
       });
       return await post<T>(url, form);
@@ -151,5 +162,44 @@ class ApiClient extends GetConnect {
       debugPrint("❌ [API CLIENT UPLOAD ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
+  }
+
+  Future<Response<T>> safeMultipartPatch<T>(String url, {Map<String, String>? fields, Map<String, MultipartFile>? files}) async {
+    debugPrint("🌐 [API FETCH CALL] safeMultipartPatch: $url | Fields: ${fields?.keys} | Files: ${files?.keys}");
+    try {
+      final form = FormData({
+        ...?fields,
+        ...?files,
+      });
+      return await patch<T>(url, form);
+    } catch (e) {
+      debugPrint("❌ [API CLIENT MULTIPART PATCH ERROR] [$url]: $e");
+      return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
+    }
+  }
+  static List<dynamic>? extractList(dynamic body) {
+    if (body == null) return null;
+    if (body is List) return body;
+    if (body is Map) {
+      final data = body['data'];
+      if (data is List) return data;
+      if (data is Map) {
+        final items = data['items'] ?? data['data'];
+        if (items is List) return items;
+      }
+      final items = body['items'];
+      if (items is List) return items;
+    }
+    return null;
+  }
+
+  dynamic extractData(Response res) {
+    if (!res.isOk || res.body == null) return null;
+    if (res.body is Map) {
+      final map = res.body as Map<String, dynamic>;
+      if (map.containsKey('data')) return map['data'];
+      return map;
+    }
+    return res.body;
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/theme/app_colors.dart';
+import '../../controllers/alert_controller.dart';
 
 class ActivityNotificationsScreen extends StatefulWidget {
   const ActivityNotificationsScreen({super.key});
@@ -95,6 +96,9 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
   }
 
   void _markAllAsRead() {
+    try {
+      Get.find<AlertController>().markAllAsRead();
+    } catch (_) {}
     setState(() {
       for (var item in _todayItems) {
         item["isRead"] = true;

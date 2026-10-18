@@ -100,9 +100,37 @@ class AuthApiService {
     return null;
   }
 
+  Future<bool> verifyOtp(String email, String code) async {
+    debugPrint("🔢 [AUTH API] Verifying OTP for: $email with code: $code");
+    final res = await _api.safePost('/auth/verify-email/confirm', {
+      'email': email,
+      'code': code,
+    });
+    if (res.isOk) {
+      debugPrint("✅ [AUTH API] OTP verification confirmed.");
+      return true;
+    }
+    // Also try alternate reset code verify endpoint
+    final res2 = await _api.safePost('/auth/verify-reset-code', {
+      'email': email,
+      'code': code,
+    });
+    if (res2.isOk) {
+      debugPrint("✅ [AUTH API] Reset code verification confirmed.");
+      return true;
+    }
+    debugPrint("⚠️ [AUTH API] OTP verification failed: ${res.statusCode}");
+    return false;
+  }
+
   Future<Map<String, dynamic>?> getProfile() async {
-    debugPrint("👤 [PROFILE API] Fetching user profile from GET ${ApiEndpoints.userMe}...");
-    final res = await _api.safeGet(ApiEndpoints.userMe);
+    debugPrint("👤 [PROFILE API] Fetching user profile...");
+    // 1. Try /users/my-profile, fallback to /users/me
+    var res = await _api.safeGet(ApiEndpoints.userMyProfile);
+    if (!res.isOk) {
+      res = await _api.safeGet(ApiEndpoints.userMe);
+    }
+
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
       final data = body['data'] is Map ? body['data'] as Map<String, dynamic> : body;
@@ -134,22 +162,46 @@ class AuthApiService {
     String? displayName,
     String? phone,
     String? country,
+    List<int>? profileImageBytes,
+    String? profileImageName,
+    List<int>? bannerImageBytes,
+    String? bannerImageName,
   }) async {
-    final Map<String, dynamic> body = {};
+    final Map<String, String> fields = {};
     if (displayName != null && displayName.trim().isNotEmpty) {
-      body['displayName'] = displayName.trim();
+      fields['displayName'] = displayName.trim();
     }
     if (phone != null && phone.trim().isNotEmpty) {
-      body['phone'] = phone.trim();
+      fields['phone'] = phone.trim();
     }
     if (country != null && country.trim().isNotEmpty) {
-      body['country'] = country.trim();
+      fields['country'] = country.trim();
     }
-    
-    if (body.isEmpty) return null;
 
-    debugPrint("✏️ [PROFILE API] Updating profile fields -> $body");
-    final res = await _api.safePatch(ApiEndpoints.userMe, body);
+    final Map<String, MultipartFile> files = {};
+    if (profileImageBytes != null && profileImageBytes.isNotEmpty) {
+      files['profileImage'] = MultipartFile(profileImageBytes, filename: profileImageName ?? 'profile.jpg');
+    }
+    if (bannerImageBytes != null && bannerImageBytes.isNotEmpty) {
+      files['profileBanner'] = MultipartFile(bannerImageBytes, filename: bannerImageName ?? 'banner.jpg');
+    }
+
+    Response res;
+    if (files.isNotEmpty) {
+      debugPrint("✏️ [PROFILE API] Sending multipart update profile with ${files.length} files...");
+      res = await _api.safeMultipartPatch(ApiEndpoints.userUpdateProfile, fields: fields, files: files);
+      if (!res.isOk) {
+        res = await _api.safeMultipartPatch(ApiEndpoints.userMe, fields: fields, files: files);
+      }
+    } else {
+      if (fields.isEmpty) return null;
+      debugPrint("✏️ [PROFILE API] Updating profile fields -> $fields");
+      res = await _api.safePatch(ApiEndpoints.userUpdateProfile, fields);
+      if (!res.isOk) {
+        res = await _api.safePatch(ApiEndpoints.userMe, fields);
+      }
+    }
+
     if (res.isOk && res.body != null) {
       final resBody = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
       final data = resBody['data'] is Map ? resBody['data'] as Map<String, dynamic> : resBody;
@@ -157,12 +209,25 @@ class AuthApiService {
       if (displayName != null) await _pref.setActiveUserName(displayName);
       if (phone != null) await _pref.setActiveUserPhone(phone);
       if (country != null) await _pref.setActiveUserCountry(country);
+      if (data['avatarUrl'] != null) await _pref.setActiveUserAvatarUrl(data['avatarUrl'].toString());
       
       debugPrint("✅ [PROFILE API] Profile updated successfully on server.");
       return data;
     }
     debugPrint("⚠️ [PROFILE API] Profile update failed -> StatusCode: ${res.statusCode} | Text: ${res.statusText}");
     return null;
+  }
+
+  Future<bool> updateFcmToken(String fcmToken) async {
+    debugPrint("🔔 [AUTH API] Syncing FCM token to backend...");
+    var res = await _api.safePatch(ApiEndpoints.userUpdateFcmToken, {'fcmToken': fcmToken});
+    if (!res.isOk) {
+      res = await _api.safePost('/devices', {
+        'token': fcmToken,
+        'platform': GetPlatform.isAndroid ? 'android' : 'ios',
+      });
+    }
+    return res.isOk;
   }
 
   Future<bool> changePassword(String currentPassword, String newPassword) async {
@@ -227,8 +292,11 @@ class AuthApiService {
   }
 
   Future<bool> deleteAccount() async {
-    debugPrint("🗑️ [PROFILE API] Calling DELETE ${ApiEndpoints.userMe}...");
-    final res = await _api.safeDelete(ApiEndpoints.userMe);
+    debugPrint("🗑️ [PROFILE API] Calling DELETE account...");
+    var res = await _api.safeDelete(ApiEndpoints.userDeleteMyAccount);
+    if (!res.isOk) {
+      res = await _api.safeDelete(ApiEndpoints.userMe);
+    }
     if (res.isOk) {
       await _pref.clearSession();
       debugPrint("✅ [PROFILE API] Account deleted from backend & local session cleared.");

@@ -25,10 +25,9 @@ class VisualSearchApiService {
   Future<List<Map<String, dynamic>>> getRecentImageSearches() async {
     final res = await _api.safeGet(ApiEndpoints.imageSearchRecent);
     if (res.isOk && res.body != null) {
-      final body = res.body is Map ? res.body : {};
-      final list = body['data'] ?? body['items'];
-      if (list is List) {
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      final list = ApiClient.extractList(res.body);
+      if (list != null) {
+        return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
       }
     }
     return [];

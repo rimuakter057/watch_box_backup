@@ -10,6 +10,7 @@ import '../../profile/account_settings_screen.dart';
 import '../../profile/change_password_screen.dart';
 import '../../profile/my_listings_screen.dart';
 import '../../profile/notifications_screen.dart';
+import '../../chat/chat_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -582,6 +583,16 @@ class _ProfileTabState extends State<ProfileTab> {
                   icon: Icons.sync_alt_rounded,
                   title: "Preferred Currency ($_selectedCurrency)",
                   onTap: () => _showCurrencyPicker(context),
+                ),
+                _buildSettingCard(
+                  context: context,
+                  icon: Icons.chat_bubble_outline_rounded,
+                  title: "Messages & Dealer Chats",
+                  onTap: () => Get.to(() => const ChatScreen(
+                    chatId: "concierge",
+                    title: "Dealer & Support Concierge",
+                    subtitle: "Real-time Live Chat",
+                  )),
                 ),
                 _buildSettingCard(
                   context: context,

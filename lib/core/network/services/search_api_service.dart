@@ -32,10 +32,9 @@ class SearchApiService {
 
     final res = await _api.safeGet(ApiEndpoints.search, query: params);
     if (res.isOk && res.body != null) {
-      final body = res.body is Map ? res.body : {};
-      final listData = body['data']?['items'] ?? body['data'] ?? body['items'];
-      if (listData is List) {
-        return listData.map((item) => WatchModel.fromMap(Map<String, dynamic>.from(item))).toList();
+      final listData = ApiClient.extractList(res.body);
+      if (listData != null) {
+        return listData.whereType<Map>().map((item) => WatchModel.fromMap(Map<String, dynamic>.from(item))).toList();
       }
     }
     return null;

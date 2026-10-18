@@ -25,6 +25,9 @@ import 'core/network/services/listings_api_service.dart';
 import 'core/network/services/recommendations_api_service.dart';
 import 'core/network/services/alerts_api_service.dart';
 import 'core/network/services/subscriptions_api_service.dart';
+import 'core/network/services/chat_api_service.dart';
+import 'core/network/socket_service.dart';
+import 'controllers/chat_controller.dart';
 
 void main() async {
   // Ensure Flutter engine bindings are initialized for SharedPreferences
@@ -32,91 +35,6 @@ void main() async {
 
   // 1. Initialize & Inject PrefManager first (asynchronous service)
   final pref = await Get.putAsync<PrefManager>(() => PrefManager().init());
-
-  // Auto-login Alexander Thorne for developer mockup testing
-  try {
-    final dbHelper = DbHelper();
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'users',
-      where: 'name = ?',
-      whereArgs: ['Alexander Thorne'],
-    );
-    int userId;
-    if (maps.isEmpty) {
-      userId = await db.insert('users', {
-        'name': 'Alexander Thorne',
-        'role': 'user',
-        'plan': 'paid',
-        'status': 'active',
-      });
-    } else {
-      userId = maps.first['id'] as int;
-      // Ensure plan is 'paid'
-      await db.update('users', {'plan': 'paid'}, where: 'id = ?', whereArgs: [userId]);
-    }
-
-    // Ensure two sold listings for Alexander Thorne exist for verification testing
-    // Listing 1 (with pre-generated invoice): Patek Philippe Nautilus
-    final List<Map<String, dynamic>> existingNautilus = await db.query(
-      'listings',
-      where: 'user_id = ? AND title = ?',
-      whereArgs: [userId, 'Patek Philippe Nautilus 5711/1A'],
-    );
-    if (existingNautilus.isEmpty) {
-      final listingId = await db.insert('listings', {
-        'user_id': userId,
-        'title': 'Patek Philippe Nautilus 5711/1A',
-        'brand': 'Patek Philippe',
-        'model': 'Nautilus',
-        'price': 119000.0,
-        'platform': 'In-App',
-        'year': 2020,
-        'condition': 'Mint',
-        'location': 'Geneva, Switzerland',
-        'is_sold': 1,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-
-      await db.insert('invoices', {
-        'listing_id': listingId,
-        'buyer_name': 'Marcus Aurelius',
-        'buyer_email': 'marcus@rome.gov',
-        'invoice_no': 'INV-2026-8891',
-        'date': '2026-06-11',
-        'price': 119000.0,
-      });
-    }
-
-    // Listing 2 (without invoice, pending details): Rolex Daytona
-    final List<Map<String, dynamic>> existingDaytona = await db.query(
-      'listings',
-      where: 'user_id = ? AND title = ?',
-      whereArgs: [userId, 'Rolex Daytona 116500LN Panda Dial'],
-    );
-    if (existingDaytona.isEmpty) {
-      await db.insert('listings', {
-        'user_id': userId,
-        'title': 'Rolex Daytona 116500LN Panda Dial',
-        'brand': 'Rolex',
-        'model': 'Daytona',
-        'price': 29500.0,
-        'platform': 'In-App',
-        'year': 2022,
-        'condition': 'Mint',
-        'location': 'London, UK',
-        'is_sold': 1,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    }
-
-    await pref.setActiveUserId(userId);
-    await pref.setActiveUserName('Alexander Thorne');
-    await pref.setActiveUserRole('user');
-    await pref.setActiveUserPlan('paid');
-  } catch (e) {
-    print("Auto-login error: $e");
-  }
 
   // 1.1 Initialize Network API Client & Domain Services
   Get.put(ApiClient());
@@ -127,11 +45,20 @@ void main() async {
   Get.put(RecommendationsApiService());
   Get.put(AlertsApiService());
   Get.put(SubscriptionsApiService());
+  Get.put(ChatApiService());
+  Get.put(SocketService());
+
   // 2. Pre-instantiate core Controllers for global availability
-  Get.put(AuthController());
+  final authController = Get.put(AuthController());
   Get.put(WatchSearchController());
   Get.put(BookmarkController());
   Get.put(AlertController());
+  Get.put(ChatController());
+
+  // 3. Restore session state via PrefManager using stored JWT token
+  if (pref.hasToken || pref.activeUserId != null) {
+    await authController.restoreSession();
+  }
 
   runApp(const TheWatchBoxApp());
 }

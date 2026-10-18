@@ -8,6 +8,7 @@ import '../../../controllers/search_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/watch_model.dart';
 import '../widgets/custom_chart.dart';
+import '../chat/chat_screen.dart';
 
 class WatchDetailScreen extends StatefulWidget {
   final WatchModel watch;
@@ -706,70 +707,79 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
   Widget _buildDealerCard(WatchModel watch) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: context.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: context.borderColor, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: watch.platformColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+      child: GestureDetector(
+        onTap: () {
+          Get.to(() => ChatScreen(
+            chatId: "dealer_${watch.id ?? watch.brand.toLowerCase()}",
+            title: "${watch.platform} Verified Dealer",
+            subtitle: watch.title,
+          ));
+        },
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: context.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.borderColor, width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: watch.platformColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.storefront_rounded,
+                    color: watch.platformColor, size: 22),
               ),
-              child: Icon(Icons.storefront_rounded,
-                  color: watch.platformColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "${watch.platform} Dealer",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: context.textPrimaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      ...List.generate(5, (i) => Icon(
-                        i < 4 ? Icons.star_rounded : Icons.star_half_rounded,
-                        size: 12,
-                        color: const Color(0xFFF59E0B),
-                      )),
-                      const SizedBox(width: 6),
-                      Text(
-                        "4.9/5 Rating (240+ sales)",
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.textSecondaryColor,
-                          fontWeight: FontWeight.w500,
-                        ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${watch.platform} Dealer",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: context.textPrimaryColor,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        ...List.generate(5, (i) => Icon(
+                          i < 4 ? Icons.star_rounded : Icons.star_half_rounded,
+                          size: 12,
+                          color: const Color(0xFFF59E0B),
+                        )),
+                        const SizedBox(width: 6),
+                        Text(
+                          "4.9/5 Rating (240+ sales)",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.textSecondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: context.chipBg,
-                borderRadius: BorderRadius.circular(10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: context.chipBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.chat_bubble_outline_rounded,
+                    size: 16, color: context.primaryNav),
               ),
-              child: Icon(Icons.open_in_new_rounded,
-                  size: 16, color: context.textSecondaryColor),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

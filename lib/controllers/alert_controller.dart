@@ -110,7 +110,18 @@ class AlertController extends GetxController {
     }
   }
 
+  void onNewAlertReceived(AlertModel alert) {
+    alertsList.insert(0, alert);
+    if (!alert.isRead) {
+      unreadCount.value++;
+    }
+    debugPrint("🔔 [ALERT CONTROLLER] Prepending new alert via real-time: ${alert.message}");
+  }
+
   Future<void> markAsRead(int alertId) async {
+    try {
+      await _alertsApi.markAsRead(alertId.toString());
+    } catch (_) {}
     try {
       final db = await _dbHelper.database;
       await db.update(

@@ -7,10 +7,9 @@ class AlertsApiService {
   Future<List<Map<String, dynamic>>?> getNotifications() async {
     final res = await _api.safeGet(ApiEndpoints.notifications);
     if (res.isOk && res.body != null) {
-      final body = res.body is Map ? res.body : {};
-      final list = body['data']?['items'] ?? body['data'] ?? body['items'];
-      if (list is List) {
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      final list = ApiClient.extractList(res.body);
+      if (list != null) {
+        return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
       }
     }
     return null;
@@ -20,7 +19,11 @@ class AlertsApiService {
     final res = await _api.safeGet(ApiEndpoints.notificationsUnreadCount);
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body : {};
-      return (body['data']?['count'] ?? body['count'] ?? 0) as int;
+      if (body['data'] is Map && body['data']['count'] != null) {
+        return body['data']['count'] is int ? body['data']['count'] as int : int.tryParse(body['data']['count'].toString()) ?? 0;
+      } else if (body['count'] != null) {
+        return body['count'] is int ? body['count'] as int : int.tryParse(body['count'].toString()) ?? 0;
+      }
     }
     return 0;
   }

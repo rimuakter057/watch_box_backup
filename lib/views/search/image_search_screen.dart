@@ -6,6 +6,7 @@ import '../../models/watch_model.dart';
 import '../home/watch_detail_screen.dart';
 import '../../core/db/db_helper.dart';
 import '../../core/network/services/visual_search_api_service.dart';
+import '../../core/network/services/search_api_service.dart';
 
 class ImageSearchScreen extends StatefulWidget {
   const ImageSearchScreen({super.key});
@@ -18,6 +19,7 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
     with TickerProviderStateMixin {
   final DbHelper _dbHelper = DbHelper();
   VisualSearchApiService get _visualApi => Get.find<VisualSearchApiService>();
+  SearchApiService get _searchApi => Get.find<SearchApiService>();
 
   late AnimationController _scannerAnimController;
   late Animation<double> _pulseAnimation;
@@ -64,15 +66,24 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
   }
 
   Future<void> _loadInitialMatches() async {
-    // Perform initial mock query for Submariner so matches populate immediately
-    final db = await _dbHelper.database;
-    final List<Map<String, dynamic>> results = await db.rawQuery(
-      "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ?",
-      ["%Submariner%", "%Rolex%"],
-    );
-    _identifiedMatches.assignAll(
-      results.map((m) => WatchModel.fromMap(m)).toList()
-    );
+    try {
+      final liveResults = await _searchApi.search(query: "Submariner");
+      if (liveResults != null && liveResults.isNotEmpty) {
+        _identifiedMatches.assignAll(liveResults);
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      final db = await _dbHelper.database;
+      final List<Map<String, dynamic>> results = await db.rawQuery(
+        "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ?",
+        ["%Submariner%", "%Rolex%"],
+      );
+      _identifiedMatches.assignAll(
+        results.map((m) => WatchModel.fromMap(m)).toList()
+      );
+    } catch (_) {}
   }
 
   // Triggered when gallery or camera is selected
@@ -93,19 +104,30 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
       _scanningMessage = "Matching horology landmarks...";
     });
 
-    // 2. Second stage delay: database lookup
+    // 2. Second stage: live search with SQLite fallback
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
 
-    final db = await _dbHelper.database;
-    final List<Map<String, dynamic>> results = await db.rawQuery(
-      "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ? OR model LIKE ?",
-      ["%$keyword%", "%$keyword%", "%$keyword%"],
-    );
+    bool liveSuccess = false;
+    try {
+      final liveResults = await _searchApi.search(query: keyword);
+      if (liveResults != null && liveResults.isNotEmpty) {
+        _identifiedMatches.assignAll(liveResults);
+        liveSuccess = true;
+      }
+    } catch (_) {}
 
-    _identifiedMatches.assignAll(
-      results.map((m) => WatchModel.fromMap(m)).toList()
-    );
+    if (!liveSuccess) {
+      final db = await _dbHelper.database;
+      final List<Map<String, dynamic>> results = await db.rawQuery(
+        "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ? OR model LIKE ?",
+        ["%$keyword%", "%$keyword%", "%$keyword%"],
+      );
+
+      _identifiedMatches.assignAll(
+        results.map((m) => WatchModel.fromMap(m)).toList()
+      );
+    }
 
     // Add to recent scans if not already there
     final exists = _recentScans.any((element) => element["name"] == label);

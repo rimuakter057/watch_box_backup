@@ -93,6 +93,7 @@ class PrefManager extends GetxService {
   }
 
   // Tokens & API
+  bool get hasToken => accessToken != null && accessToken!.isNotEmpty;
   String? get accessToken => _prefs.getString(_keyAccessToken);
   Future<void> setAccessToken(String? token) async {
     if (token == null) {

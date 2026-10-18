@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:get/get.dart';
 import '../core/db/db_helper.dart';
+import '../core/network/api_client.dart';
+import '../core/network/api_endpoints.dart';
+import '../core/network/services/listings_api_service.dart';
 import '../models/watch_model.dart';
 import '../models/search_query_model.dart';
 import 'auth_controller.dart';
@@ -8,6 +11,22 @@ import 'auth_controller.dart';
 class BookmarkController extends GetxController {
   final DbHelper _dbHelper = DbHelper();
   final AuthController _auth = Get.find<AuthController>();
+
+  ListingsApiService get _listingsApi {
+    try {
+      return Get.find<ListingsApiService>();
+    } catch (_) {
+      return ListingsApiService();
+    }
+  }
+
+  ApiClient get _api {
+    try {
+      return ApiClient.to;
+    } catch (_) {
+      return Get.find<ApiClient>();
+    }
+  }
 
   final RxList<WatchModel> bookmarkedWatches = <WatchModel>[].obs;
   final RxList<SearchQueryModel> savedSearches = <SearchQueryModel>[].obs;
@@ -37,19 +56,33 @@ class BookmarkController extends GetxController {
   // 1. Fetch saved listings
   Future<void> fetchBookmarks() async {
     final user = _auth.currentUser.value;
-    if (user == null || user.id == null) return;
+    if (user == null) return;
 
     isLoading.value = true;
     try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT l.* FROM listings l
-        INNER JOIN bookmarks b ON l.id = b.listing_id
-        WHERE b.user_id = ?
-      ''', [user.id]);
-      
-      final list = maps.map((m) => WatchModel.fromMap(m)).toList();
-      bookmarkedWatches.assignAll(list);
+      // 1. Live API fetch (POST/GET /api/v1/posts/saved-posts or /me/saved-listings)
+      final liveSaved = await _listingsApi.getSavedPosts();
+      if (liveSaved != null && liveSaved.isNotEmpty) {
+        bookmarkedWatches.assignAll(liveSaved);
+        isLoading.value = false;
+        return;
+      }
+    } catch (e) {
+      print("Live bookmarks sync failed: $e");
+    }
+
+    try {
+      if (user.id != null) {
+        final db = await _dbHelper.database;
+        final List<Map<String, dynamic>> maps = await db.rawQuery('''
+          SELECT l.* FROM listings l
+          INNER JOIN bookmarks b ON l.id = b.listing_id
+          WHERE b.user_id = ?
+        ''', [user.id]);
+        
+        final list = maps.map((m) => WatchModel.fromMap(m)).toList();
+        bookmarkedWatches.assignAll(list);
+      }
     } catch (e) {
       print("Error fetching bookmarks: $e");
     } finally {
@@ -60,28 +93,38 @@ class BookmarkController extends GetxController {
   // Toggle Bookmark
   Future<void> toggleBookmark(WatchModel watch) async {
     final user = _auth.currentUser.value;
-    if (user == null || user.id == null || watch.id == null) return;
+    if (user == null || watch.id == null) return;
 
     try {
-      final db = await _dbHelper.database;
-      final isSaved = isBookmarked(watch.id!);
+      // 1. Live API toggle
+      try {
+        await _listingsApi.toggleSave(watch.id.toString());
+      } catch (e) {
+        print("Backend toggle save failed: $e");
+      }
 
+      // 2. Local state update
+      final isSaved = isBookmarked(watch.id!);
       if (isSaved) {
-        // Delete
-        await db.delete(
-          'bookmarks',
-          where: 'user_id = ? AND listing_id = ?',
-          whereArgs: [user.id, watch.id],
-        );
         bookmarkedWatches.removeWhere((w) => w.id == watch.id);
+        if (user.id != null) {
+          final db = await _dbHelper.database;
+          await db.delete(
+            'bookmarks',
+            where: 'user_id = ? AND listing_id = ?',
+            whereArgs: [user.id, watch.id],
+          );
+        }
         Get.snackbar("Bookmark Removed", "Removed ${watch.title} from bookmarks.");
       } else {
-        // Insert
-        await db.insert('bookmarks', {
-          'user_id': user.id,
-          'listing_id': watch.id,
-        });
         bookmarkedWatches.add(watch);
+        if (user.id != null) {
+          final db = await _dbHelper.database;
+          await db.insert('bookmarks', {
+            'user_id': user.id,
+            'listing_id': watch.id,
+          });
+        }
         Get.snackbar("Bookmark Saved", "Saved ${watch.title} to bookmarks.");
       }
     } catch (e) {
@@ -96,7 +139,7 @@ class BookmarkController extends GetxController {
   // 2. Fetch saved searches
   Future<void> fetchSavedSearches() async {
     final user = _auth.currentUser.value;
-    if (user == null || user.id == null) return;
+    if (user == null) return;
 
     try {
       final db = await _dbHelper.database;
@@ -178,6 +221,15 @@ class BookmarkController extends GetxController {
     if (user == null || user.id == null) return;
 
     try {
+      try {
+        await _api.safePost(ApiEndpoints.savedSearches, {
+          'query': query,
+          'filters': filters,
+        });
+      } catch (e) {
+        print("API saved-searches post failed: $e");
+      }
+
       final db = await _dbHelper.database;
       final filtersJsonStr = jsonEncode(filters);
 
@@ -214,6 +266,12 @@ class BookmarkController extends GetxController {
   // Remove Saved Search
   Future<void> removeSavedSearch(int savedSearchId) async {
     try {
+      try {
+        await _api.safeDelete('${ApiEndpoints.savedSearches}/$savedSearchId');
+      } catch (e) {
+        print("API saved-searches delete failed: $e");
+      }
+
       final db = await _dbHelper.database;
       await db.delete(
         'saved_searches',
