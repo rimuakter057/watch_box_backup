@@ -14,7 +14,7 @@ class ApiClient extends GetConnect {
     baseUrl = _pref.apiBaseUrl;
     timeout = const Duration(seconds: 6);
 
-    // Request modifier: Attach JSON headers and JWT Bearer token
+    // Request modifier: Attach JSON headers and JWT Bearer token & debug log
     httpClient.addRequestModifier<dynamic>((Request request) {
       request.headers['Accept'] = 'application/json';
       request.headers['Content-Type'] = 'application/json';
@@ -23,14 +23,33 @@ class ApiClient extends GetConnect {
       if (token != null && token.isNotEmpty) {
         request.headers['Authorization'] = 'Bearer $token';
       }
+
+      debugPrint("----------------------------------------------------------------------");
+      debugPrint("🚀 [HTTP REQUEST] ${request.method.toUpperCase()} -> ${request.url}");
+      debugPrint("📋 [HEADERS] Auth: ${token != null && token.isNotEmpty ? 'Bearer [PRESENT]' : '[NONE]'} | Accept: application/json");
       return request;
     });
 
-    // Response modifier: Automatically handle 401 token refresh
+    // Response modifier: Automatically handle 401 token refresh & log response
     httpClient.addResponseModifier((Request request, Response response) async {
+      debugPrint("----------------------------------------------------------------------");
+      if (response.isOk) {
+        debugPrint("✅ [HTTP RESPONSE ${response.statusCode}] ${request.method.toUpperCase()} ${request.url}");
+        final bodySnippet = response.bodyString != null && response.bodyString!.length > 400
+            ? "${response.bodyString!.substring(0, 400)}... (truncated)"
+            : response.bodyString;
+        debugPrint("📄 [RESPONSE DATA] $bodySnippet");
+      } else {
+        debugPrint("⚠️ [HTTP ERROR ${response.statusCode}] ${request.method.toUpperCase()} ${request.url} | StatusText: ${response.statusText}");
+        debugPrint("📄 [ERROR BODY] ${response.bodyString}");
+      }
+      debugPrint("----------------------------------------------------------------------");
+
       if (response.statusCode == 401 && _pref.refreshToken != null) {
+        debugPrint("🔄 [HTTP AUTH] 401 Unauthorized encountered. Attempting silent token refresh...");
         final refreshed = await _attemptRefreshToken();
         if (refreshed) {
+          debugPrint("✅ [HTTP AUTH] Silent refresh succeeded. Retrying request to ${request.url.path}...");
           request.headers['Authorization'] = 'Bearer ${_pref.accessToken}';
           return httpClient.request(
             request.url.path,
@@ -38,6 +57,8 @@ class ApiClient extends GetConnect {
             body: request.bodyBytes,
             headers: request.headers,
           );
+        } else {
+          debugPrint("❌ [HTTP AUTH] Silent token refresh failed.");
         }
       }
       return response;
@@ -48,6 +69,7 @@ class ApiClient extends GetConnect {
     final rToken = _pref.refreshToken;
     if (rToken == null) return false;
 
+    debugPrint("🔑 [HTTP REFRESH] Sending POST /auth/refresh with refresh token...");
     try {
       final res = await post(
         '/auth/refresh',
@@ -55,57 +77,70 @@ class ApiClient extends GetConnect {
       );
       if (res.isOk && res.body != null) {
         final data = res.body is Map ? res.body['data'] ?? res.body : jsonDecode(res.bodyString ?? '{}');
-        final newAccess = data['accessToken'] ?? data['access_token'];
-        final newRefresh = data['refreshToken'] ?? data['refresh_token'];
+        final tokens = data is Map && data['tokens'] is Map ? data['tokens'] : data;
+        final newAccess = tokens['accessToken'] ?? tokens['access_token'] ?? data['accessToken'];
+        final newRefresh = tokens['refreshToken'] ?? tokens['refresh_token'] ?? data['refreshToken'];
         if (newAccess != null) {
           await _pref.setAccessToken(newAccess.toString());
           if (newRefresh != null) {
             await _pref.setRefreshToken(newRefresh.toString());
           }
+          debugPrint("🔑 [HTTP REFRESH] New access token stored successfully.");
           return true;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("❌ [HTTP REFRESH ERROR] $e");
+    }
     return false;
   }
 
   Future<Response<T>> safeGet<T>(String url, {Map<String, dynamic>? query}) async {
+    debugPrint("🌐 [API FETCH CALL] safeGet: $url ${query != null ? '| Query: $query' : ''}");
     try {
-      return await get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      final res = await get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      return res;
     } catch (e) {
-      debugPrint("ApiClient GET error [$url]: $e");
+      debugPrint("❌ [API CLIENT GET ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
   }
 
   Future<Response<T>> safePost<T>(String url, dynamic body, {Map<String, dynamic>? query}) async {
+    debugPrint("🌐 [API FETCH CALL] safePost: $url | Payload: $body ${query != null ? '| Query: $query' : ''}");
     try {
-      return await post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      final res = await post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      return res;
     } catch (e) {
-      debugPrint("ApiClient POST error [$url]: $e");
+      debugPrint("❌ [API CLIENT POST ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
   }
 
   Future<Response<T>> safePatch<T>(String url, dynamic body) async {
+    debugPrint("🌐 [API FETCH CALL] safePatch: $url | Payload: $body");
     try {
-      return await patch<T>(url, body);
+      final res = await patch<T>(url, body);
+      return res;
     } catch (e) {
-      debugPrint("ApiClient PATCH error [$url]: $e");
+      debugPrint("❌ [API CLIENT PATCH ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
   }
 
   Future<Response<T>> safeDelete<T>(String url) async {
+    debugPrint("🌐 [API FETCH CALL] safeDelete: $url");
     try {
-      return await delete<T>(url);
+      final res = await delete<T>(url);
+      return res;
     } catch (e) {
-      debugPrint("ApiClient DELETE error [$url]: $e");
+      debugPrint("❌ [API CLIENT DELETE ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
   }
 
   Future<Response<T>> safeUpload<T>(String url, List<int> imageBytes, String filename, {Map<String, String>? fields}) async {
+    debugPrint("🌐 [API FETCH CALL] safeUpload: $url | File: $filename (${imageBytes.length} bytes)");
     try {
       final form = FormData({
         'image': MultipartFile(imageBytes, filename: filename),
@@ -113,7 +148,7 @@ class ApiClient extends GetConnect {
       });
       return await post<T>(url, form);
     } catch (e) {
-      debugPrint("ApiClient Upload error [$url]: $e");
+      debugPrint("❌ [API CLIENT UPLOAD ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
     }
   }

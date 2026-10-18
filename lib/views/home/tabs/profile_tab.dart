@@ -28,7 +28,19 @@ class _ProfileTabState extends State<ProfileTab> {
   @override
   void initState() {
     super.initState();
-    _darkMode = Get.find<PrefManager>().isDarkMode;
+    final pref = Get.find<PrefManager>();
+    _darkMode = pref.isDarkMode;
+    _selectedCurrency = pref.preferredCurrency;
+    debugPrint("📱 [PROFILE TAB] Initializing ProfileTab -> Initial Currency: $_selectedCurrency | DarkMode: $_darkMode");
+    _auth.fetchProfile().then((u) {
+      if (mounted && u != null) {
+        setState(() {
+          _darkMode = u.darkMode;
+          _selectedCurrency = u.currency;
+        });
+        debugPrint("📱 [PROFILE TAB] ProfileTab state updated with live backend profile -> Name: ${u.name} | Currency: ${u.currency} | Dark: ${u.darkMode}");
+      }
+    });
   }
 
   void _toggleEbayConnection() {
@@ -49,10 +61,10 @@ class _ProfileTabState extends State<ProfileTab> {
   void _showCurrencyPicker(BuildContext context) {
     final currencies = [
       {"code": "USD", "name": "US Dollar (\$)", "symbol": "\$"},
-      {"code": "EUR", "name": "Euro (â‚¬)", "symbol": "â‚¬"},
-      {"code": "GBP", "name": "British Pound (Â£)", "symbol": "Â£"},
+      {"code": "EUR", "name": "Euro (€)", "symbol": "€"},
+      {"code": "GBP", "name": "British Pound (£)", "symbol": "£"},
       {"code": "CHF", "name": "Swiss Franc (CHF)", "symbol": "CHF"},
-      {"code": "JPY", "name": "Japanese Yen (Â¥)", "symbol": "Â¥"},
+      {"code": "JPY", "name": "Japanese Yen (¥)", "symbol": "¥"},
       {"code": "AED", "name": "UAE Dirham (AED)", "symbol": "AED"},
     ];
 
@@ -104,9 +116,12 @@ class _ProfileTabState extends State<ProfileTab> {
                     ? const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20)
                     : null,
                 onTap: () {
+                  final newCurr = curr["code"]!;
+                  debugPrint("📱 [PROFILE TAB] User picked preferred currency: $newCurr");
                   setState(() {
-                    _selectedCurrency = curr["code"]!;
+                    _selectedCurrency = newCurr;
                   });
+                  _auth.updatePreferences(currency: newCurr);
                   Navigator.pop(ctx);
                 },
               );
@@ -178,72 +193,152 @@ class _ProfileTabState extends State<ProfileTab> {
         showDialTicks: true,
         child: Obx(() {
           final user = _auth.currentUser.value;
-          final bool isPremium = user?.plan == 'paid';
-          final String name = user?.name ?? "Alexander Thorne";
-          final String email = name.toLowerCase().contains("alexander")
-              ? "customer@example.com"
-              : "${name.toLowerCase().replaceAll(' ', '')}@example.com";
+          final bool isPremium = user?.isPaid ?? false;
+          final String name = user?.name.isNotEmpty == true ? user!.name : "Alexander Thorne";
+          final String email = user?.email.isNotEmpty == true ? user!.email : "customer@example.com";
           final String role = (user?.role ?? "USER").toUpperCase();
+          final String? avatarUrl = user?.avatarUrl;
+          final String? country = user?.country;
+          final String? phone = user?.phone;
+          final bool emailVerified = user?.emailVerified ?? false;
 
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 1. User Avatar & Info
-                Center(
-                  child: Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                      shape: BoxShape.circle,
+          return RefreshIndicator(
+            onRefresh: () async {
+              debugPrint("📱 [PROFILE TAB] Pull-to-refresh: Syncing user profile from backend...");
+              await _auth.fetchProfile();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // 1. User Avatar & Info
+                  Center(
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 92,
+                          height: 92,
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF07274C),
+                              width: 2,
+                            ),
+                          ),
+                          child: ClipOval(
+                            child: avatarUrl != null && avatarUrl.isNotEmpty
+                                ? Image.network(
+                                    avatarUrl,
+                                    width: 92,
+                                    height: 92,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Center(
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : "A",
+                                        style: TextStyle(
+                                          fontSize: 34,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.white : const Color(0xFF07274C),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Center(
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : "A",
+                                      style: TextStyle(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.white : const Color(0xFF07274C),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        if (emailVerified)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check, size: 14, color: Colors.white),
+                            ),
+                          ),
+                      ],
                     ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.person,
-                        size: 46,
-                        color: Color(0xFF475569),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  if (phone != null && phone.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      phone,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  if (country != null && country.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF94A3B8)),
+                        const SizedBox(width: 3),
+                        Text(
+                          country,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF07274C),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      role,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  email,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF07274C),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    role,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 20),
 
                 // 2. Current Membership Card
@@ -531,11 +626,11 @@ class _ProfileTabState extends State<ProfileTab> {
                           value: _darkMode,
                           activeTrackColor: const Color(0xFF07274C),
                           onChanged: (val) {
+                            debugPrint("📱 [PROFILE TAB] Dark mode switch toggled: $val");
                             setState(() {
                               _darkMode = val;
                             });
-                            final pref = Get.find<PrefManager>();
-                            pref.setDarkMode(val);
+                            _auth.updatePreferences(darkMode: val);
                             Get.changeThemeMode(val ? ThemeMode.dark : ThemeMode.light);
                           },
                         ),
@@ -581,8 +676,9 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ],
             ),
-          );
-        }),
+          ),
+        );
+      }),
       ),
     );
   }

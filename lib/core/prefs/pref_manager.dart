@@ -6,10 +6,15 @@ class PrefManager extends GetxService {
 
   static const String _keyOnboarded = 'onboarded';
   static const String _keyActiveUserId = 'active_user_id';
+  static const String _keyActiveUserBackendId = 'active_user_backend_id';
   static const String _keyActiveUserName = 'active_user_name';
+  static const String _keyActiveUserEmail = 'active_user_email';
+  static const String _keyActiveUserPhone = 'active_user_phone';
+  static const String _keyActiveUserCountry = 'active_user_country';
+  static const String _keyActiveUserAvatarUrl = 'active_user_avatar_url';
   static const String _keyActiveUserRole = 'active_user_role';
   static const String _keyActiveUserPlan = 'active_user_plan';
-  
+
   // Auth Token & API settings
   static const String _keyAccessToken = 'auth_access_token';
   static const String _keyRefreshToken = 'auth_refresh_token';
@@ -40,14 +45,41 @@ class PrefManager extends GetxService {
     final id = _prefs.getInt(_keyActiveUserId);
     return id == -1 ? null : id;
   }
-  
+
   Future<void> setActiveUserId(int? id) async {
     await _prefs.setInt(_keyActiveUserId, id ?? -1);
+  }
+
+  String get activeUserBackendId =>
+      _prefs.getString(_keyActiveUserBackendId) ?? '';
+  Future<void> setActiveUserBackendId(String id) async {
+    await _prefs.setString(_keyActiveUserBackendId, id);
   }
 
   String get activeUserName => _prefs.getString(_keyActiveUserName) ?? '';
   Future<void> setActiveUserName(String name) async {
     await _prefs.setString(_keyActiveUserName, name);
+  }
+
+  String get activeUserEmail => _prefs.getString(_keyActiveUserEmail) ?? '';
+  Future<void> setActiveUserEmail(String email) async {
+    await _prefs.setString(_keyActiveUserEmail, email);
+  }
+
+  String get activeUserPhone => _prefs.getString(_keyActiveUserPhone) ?? '';
+  Future<void> setActiveUserPhone(String phone) async {
+    await _prefs.setString(_keyActiveUserPhone, phone);
+  }
+
+  String get activeUserCountry => _prefs.getString(_keyActiveUserCountry) ?? '';
+  Future<void> setActiveUserCountry(String country) async {
+    await _prefs.setString(_keyActiveUserCountry, country);
+  }
+
+  String get activeUserAvatarUrl =>
+      _prefs.getString(_keyActiveUserAvatarUrl) ?? '';
+  Future<void> setActiveUserAvatarUrl(String url) async {
+    await _prefs.setString(_keyActiveUserAvatarUrl, url);
   }
 
   String get activeUserRole => _prefs.getString(_keyActiveUserRole) ?? 'user';
@@ -83,15 +115,17 @@ class PrefManager extends GetxService {
     final custom = _prefs.getString(_keyApiBaseUrl);
     if (custom != null && custom.isNotEmpty) return custom;
     if (GetPlatform.isAndroid) {
-      return 'http://10.0.2.2:4000/api/v1';
+      return 'https://api.mywatchbox.net/api/v1';
     }
-    return 'http://localhost:4000/api/v1';
+    return 'https://api.mywatchbox.net/api/v1';
   }
+
   Future<void> setApiBaseUrl(String url) async {
     await _prefs.setString(_keyApiBaseUrl, url);
   }
 
-  String get preferredCurrency => _prefs.getString(_keySelectedCurrency) ?? 'USD';
+  String get preferredCurrency =>
+      _prefs.getString(_keySelectedCurrency) ?? 'USD';
   Future<void> setPreferredCurrency(String curr) async {
     await _prefs.setString(_keySelectedCurrency, curr);
   }
@@ -131,7 +165,12 @@ class PrefManager extends GetxService {
   // Logout clear
   Future<void> clearSession() async {
     await _prefs.remove(_keyActiveUserId);
+    await _prefs.remove(_keyActiveUserBackendId);
     await _prefs.remove(_keyActiveUserName);
+    await _prefs.remove(_keyActiveUserEmail);
+    await _prefs.remove(_keyActiveUserPhone);
+    await _prefs.remove(_keyActiveUserCountry);
+    await _prefs.remove(_keyActiveUserAvatarUrl);
     await _prefs.remove(_keyActiveUserRole);
     await _prefs.remove(_keyActiveUserPlan);
     await _prefs.remove(_keyAccessToken);

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/theme/app_colors.dart';
@@ -31,9 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _confirmPasswordController = TextEditingController(text: "password123");
   final TextEditingController _newPasswordController = TextEditingController();
 
-  // Test Bypass state parameters
-  String _selectedRole = "user"; // 'user' or 'admin'
-  String _selectedPlan = "paid"; // 'free' or 'paid'
+  // Test state parameters
+  final String _selectedRole = "user"; // 'user' or 'admin'
+  final String _selectedPlan = "paid"; // 'free' or 'paid'
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -48,19 +48,75 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleBypassLogin() async {
+  void _handleSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final name = _nameController.text.trim().isEmpty ? "Alexander Thorne" : _nameController.text.trim();
+
+    debugPrint("📱 [LOGIN SCREEN] User submitted Sign In -> Name: '$name', Email: '$email'");
     final success = await _authController.login(
-      _nameController.text.trim().isEmpty ? "Horology Fan" : _nameController.text,
+      name,
       _selectedRole,
       _selectedPlan,
+      email: email.isNotEmpty ? email : null,
+      password: password.isNotEmpty ? password : null,
     );
     if (success) {
-      if (_selectedRole == 'admin') {
-        Get.offAllNamed('/admin');
-      } else {
-        Get.offAllNamed('/home');
-      }
+      debugPrint("📱 [LOGIN SCREEN] Sign in successful. Navigating to /home");
+      Get.offAllNamed('/home');
+    } else {
+      debugPrint("⚠️ [LOGIN SCREEN] Sign in failed.");
     }
+  }
+
+  void _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    debugPrint("📱 [LOGIN SCREEN] User submitted Register -> Name: '$name', Email: '$email'");
+    if (name.isEmpty) {
+      Get.snackbar("Missing Name", "Please enter your display name.");
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
+      Get.snackbar("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 8) {
+      Get.snackbar("Short Password", "Password must be at least 8 characters.");
+      return;
+    }
+    if (password != confirmPassword) {
+      Get.snackbar("Mismatch", "Passwords do not match.");
+      return;
+    }
+
+    final success = await _authController.register(
+      name,
+      email,
+      password,
+      role: _selectedRole,
+      plan: _selectedPlan,
+    );
+    if (success) {
+      debugPrint("📱 [LOGIN SCREEN] Registration successful. Navigating to /home");
+      Get.offAllNamed('/home');
+    } else {
+      debugPrint("⚠️ [LOGIN SCREEN] Registration failed.");
+    }
+  }
+
+  void _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    debugPrint("📱 [LOGIN SCREEN] User submitted Forgot Password -> Email: '$email'");
+    if (email.isEmpty || !email.contains('@')) {
+      Get.snackbar("Invalid Email", "Please enter your registered email address.");
+      return;
+    }
+    await _authController.forgotPassword(email);
+    setState(() => _currentState = AuthScreenState.checkEmail);
   }
 
 
@@ -355,7 +411,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Sign In Button
               _buildPrimaryButton(
                 text: "Sign In",
-                onPressed: _handleBypassLogin,
+                onPressed: _handleSignIn,
               ),
             ],
           ),
@@ -471,7 +527,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Register Button
               _buildPrimaryButton(
                 text: "Register Account",
-                onPressed: _handleBypassLogin,
+                onPressed: _handleRegister,
               ),
             ],
           ),
@@ -545,9 +601,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Send Reset Link Button
               _buildPrimaryButton(
                 text: "Send Reset Link",
-                onPressed: () {
-                  setState(() => _currentState = AuthScreenState.checkEmail);
-                },
+                onPressed: _handleForgotPassword,
               ),
             ],
           ),

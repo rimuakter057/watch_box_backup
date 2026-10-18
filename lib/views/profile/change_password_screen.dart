@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/auth_controller.dart';
 import '../../core/theme/app_colors.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -10,8 +11,8 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  final _oldPasswordController = TextEditingController(text: "******");
-  final _newPasswordController = TextEditingController(text: "******");
+  final _oldPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
   
   bool _obscureOld = true;
   bool _obscureNew = true;
@@ -25,25 +26,36 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   void _handleUpdate() async {
+    final oldPass = _oldPasswordController.text.trim();
+    final newPass = _newPasswordController.text.trim();
+
+    if (oldPass.length < 8) {
+      debugPrint("⚠️ [CHANGE PASSWORD UI] Old password validation failed (<8 chars).");
+      Get.snackbar("Invalid Password", "Current password must be at least 8 characters.");
+      return;
+    }
+    if (newPass.length < 8) {
+      debugPrint("⚠️ [CHANGE PASSWORD UI] New password validation failed (<8 chars).");
+      Get.snackbar("Invalid Password", "New password must be at least 8 characters.");
+      return;
+    }
+
+    debugPrint("📱 [CHANGE PASSWORD UI] Submitting password update request...");
     setState(() {
       _isUpdating = true;
     });
 
-    // Simulate database update delay
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final auth = Get.find<AuthController>();
+    final success = await auth.changePassword(oldPass, newPass);
+    debugPrint("📱 [CHANGE PASSWORD UI] Result from server: $success");
 
     if (mounted) {
       setState(() {
         _isUpdating = false;
       });
-      Get.snackbar(
-        "Password Updated", 
-        "Your secure vault password was updated successfully.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: context.primaryNav,
-        colorText: Colors.white,
-      );
-      Get.back();
+      if (success) {
+        Get.back();
+      }
     }
   }
 

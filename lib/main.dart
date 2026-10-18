@@ -12,7 +12,6 @@ import 'views/splash/splash_screen.dart';
 import 'views/onboarding/onboarding_screen.dart';
 import 'views/auth/login_screen.dart';
 import 'views/home/home_screen.dart';
-import 'views/admin/admin_dashboard.dart';
 import 'views/profile/subscription_plans_screen.dart';
 import 'views/profile/notifications_screen.dart';
 import 'views/profile/account_settings_screen.dart';
@@ -174,10 +173,6 @@ class TheWatchBoxApp extends StatelessWidget {
             GetPage(
               name: '/home',
               page: () => const MainContainerScreen(),
-            ),
-            GetPage(
-              name: '/admin',
-              page: () => const AdminDashboard(),
             ),
             GetPage(
               name: '/subscription_plans',
