@@ -55,10 +55,8 @@ void main() async {
   Get.put(AlertController());
   Get.put(ChatController());
 
-  // 3. Restore session state via PrefManager using stored JWT token
-  if (pref.hasToken || pref.activeUserId != null) {
-    await authController.restoreSession();
-  }
+  // 3. Restore session state via PrefManager or auto-authenticate
+  await authController.restoreSession();
 
   runApp(const TheWatchBoxApp());
 }

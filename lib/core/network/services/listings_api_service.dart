@@ -6,20 +6,11 @@ class ListingsApiService {
   final ApiClient _api = ApiClient.to;
 
   Future<List<WatchModel>?> getListings({int page = 1, int limit = 20, String? sort}) async {
-    // 1. Try /posts/get-all-posts
-    var res = await _api.safeGet(ApiEndpoints.postsGetAll, query: {
+    final res = await _api.safeGet(ApiEndpoints.listings, query: {
       'page': page,
       'limit': limit,
       ...?sort != null ? {'sort': sort} : null,
     });
-    // 2. Fallback to /listings
-    if (!res.isOk) {
-      res = await _api.safeGet(ApiEndpoints.listings, query: {
-        'page': page,
-        'limit': limit,
-        ...?sort != null ? {'sort': sort} : null,
-      });
-    }
 
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
@@ -42,13 +33,7 @@ class ListingsApiService {
   }
 
   Future<List<WatchModel>?> getMyListings({String status = 'active'}) async {
-    // 1. Try /posts/my-posts
-    var res = await _api.safeGet(ApiEndpoints.postsMy, query: {'status': status});
-    // 2. Fallback to /me/listings
-    if (!res.isOk) {
-      res = await _api.safeGet(ApiEndpoints.myListings, query: {'status': status});
-    }
-
+    final res = await _api.safeGet(ApiEndpoints.myListings, query: {'status': status});
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
       if (list != null) {
@@ -59,13 +44,7 @@ class ListingsApiService {
   }
 
   Future<WatchModel?> getListingDetails(String listingId) async {
-    // 1. Try /posts/view-post/:id
-    var res = await _api.safeGet('${ApiEndpoints.postsView}/$listingId');
-    // 2. Fallback to /listings/:id
-    if (!res.isOk) {
-      res = await _api.safeGet('${ApiEndpoints.listings}/$listingId');
-    }
-
+    final res = await _api.safeGet('${ApiEndpoints.listings}/$listingId');
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body : {};
       final data = body['data'] ?? body;
@@ -79,20 +58,15 @@ class ListingsApiService {
   Future<Map<String, dynamic>?> createListing(Map<String, dynamic> listingData, {List<int>? imageBytes, String? filename}) async {
     if (imageBytes != null && imageBytes.isNotEmpty) {
       final fields = listingData.map((k, v) => MapEntry(k, v.toString()));
-      var res = await _api.safeUpload(ApiEndpoints.postsCreate, imageBytes, filename ?? 'watch.jpg', fields: fields);
-      if (!res.isOk) {
-        res = await _api.safeUpload(ApiEndpoints.listings, imageBytes, filename ?? 'watch.jpg', fields: fields);
-      }
+      final res = await _api.safeUpload(ApiEndpoints.listings, imageBytes, filename ?? 'watch.jpg', fields: fields);
       if (res.isOk && res.body != null) {
         final body = res.body is Map ? res.body : {};
         return body['data'] is Map<String, dynamic> ? body['data'] : null;
       }
+      return null;
     }
 
-    var res = await _api.safePost(ApiEndpoints.postsCreate, listingData);
-    if (!res.isOk) {
-      res = await _api.safePost(ApiEndpoints.listings, listingData);
-    }
+    final res = await _api.safePost(ApiEndpoints.listings, listingData);
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body : {};
       return body['data'] is Map<String, dynamic> ? body['data'] : null;
@@ -101,34 +75,47 @@ class ListingsApiService {
   }
 
   Future<bool> deleteListing(String listingId) async {
-    var res = await _api.safeDelete('${ApiEndpoints.postsDelete}/$listingId');
-    if (!res.isOk) {
-      res = await _api.safeDelete('${ApiEndpoints.listings}/$listingId');
-    }
+    final res = await _api.safeDelete('${ApiEndpoints.listings}/$listingId');
     return res.isOk;
   }
 
   Future<bool> markListingSold(String listingId) async {
-    var res = await _api.safePost('${ApiEndpoints.listings}/$listingId/mark-sold', {});
-    if (!res.isOk) {
-      res = await _api.safePatch('${ApiEndpoints.listings}/$listingId', {'status': 'sold', 'is_sold': 1});
-    }
+    final res = await _api.safePost('${ApiEndpoints.listings}/$listingId/mark-sold', {});
     return res.isOk;
   }
 
-  Future<bool> toggleSave(String listingId) async {
-    var res = await _api.safePost('${ApiEndpoints.postsToggleSave}/$listingId', {});
-    if (!res.isOk) {
-      res = await _api.safePost('${ApiEndpoints.listings}/$listingId/save', {});
+  Future<bool> saveProduct(WatchModel watch) async {
+    final payload = <String, dynamic>{
+      'source': watch.isEbay ? 'ebay' : 'local',
+      'id': watch.idString,
+      'productId': watch.idString,
+      if (watch.title.isNotEmpty) 'title': watch.title.length > 295 ? watch.title.substring(0, 295) : watch.title,
+      if (watch.brand.isNotEmpty) 'brand': watch.brand,
+      if (watch.price > 0) 'price': watch.price,
+      if (watch.currency.isNotEmpty) 'currency': watch.currency,
+      if (watch.rawImage != null && watch.rawImage!.isNotEmpty) 'image': watch.rawImage,
+      if (watch.location.isNotEmpty) 'region': watch.location,
+    };
+    final res = await _api.safePost(ApiEndpoints.savedProducts, payload);
+    return res.isOk;
+  }
+
+  Future<bool> toggleSave(String listingId, {WatchModel? watch}) async {
+    if (watch != null) {
+      return saveProduct(watch);
     }
+    final isEbayId = listingId.toLowerCase().contains('ebay') || listingId.contains('|');
+    final payload = <String, dynamic>{
+      'source': isEbayId ? 'ebay' : 'local',
+      'id': listingId,
+      'productId': listingId,
+    };
+    final res = await _api.safePost(ApiEndpoints.savedProducts, payload);
     return res.isOk;
   }
 
   Future<List<WatchModel>?> getSavedPosts() async {
-    var res = await _api.safeGet(ApiEndpoints.postsSaved);
-    if (!res.isOk) {
-      res = await _api.safeGet(ApiEndpoints.savedListings);
-    }
+    final res = await _api.safeGet(ApiEndpoints.savedProducts);
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
       if (list != null) {
@@ -139,17 +126,29 @@ class ListingsApiService {
   }
 
   Future<bool> purchaseListing(String listingId, {double? price, String? buyerName}) async {
-    var res = await _api.safePost('/orders', {
+    // 1. Create order on backend: POST /api/v1/orders
+    final orderRes = await _api.safePost('/orders', {
       'listingId': listingId,
-      if (price != null) 'amount': price,
+      'quantity': 1,
+    });
+    if (orderRes.isOk && orderRes.body != null) {
+      final body = orderRes.body is Map ? orderRes.body : {};
+      final data = body['data'] is Map ? (body['data']['order'] ?? body['data']) : body['data'];
+      final orderId = data is Map ? (data['id'] ?? data['_id'])?.toString() : null;
+      if (orderId != null && orderId.isNotEmpty) {
+        // 2. Confirm order payment: POST /api/v1/orders/:orderId/confirm-payment
+        final confirmRes = await _api.safePost('/orders/$orderId/confirm-payment', {});
+        if (confirmRes.isOk) return true;
+      }
+      return true;
+    }
+
+    // Direct purchase fallback: POST /api/v1/purchases
+    final res = await _api.safePost('/purchases', {
+      'listingId': listingId,
+      if (price != null) 'price': price,
       if (buyerName != null) 'buyerName': buyerName,
     });
-    if (!res.isOk) {
-      res = await _api.safePost('/purchases', {
-        'listingId': listingId,
-        if (price != null) 'price': price,
-      });
-    }
     return res.isOk;
   }
 

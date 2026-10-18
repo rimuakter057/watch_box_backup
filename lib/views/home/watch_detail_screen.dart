@@ -1,7 +1,8 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../controllers/bookmark_controller.dart';
 import '../../../controllers/auth_controller.dart';
 import '../../../controllers/search_controller.dart';
@@ -154,22 +155,33 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
     )}';
   }
 
-  void _simulatePlatformRedirect() {
+  Future<void> _openRedirectLink() async {
+    final urlStr = widget.watch.redirectUrl;
+    if (urlStr != null && urlStr.isNotEmpty) {
+      final uri = Uri.tryParse(urlStr);
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+    _showRedirectBottomSheet(urlStr ?? 'https://www.ebay.com');
+  }
+
+  void _showRedirectBottomSheet(String url) {
     Get.bottomSheet(
       Container(
         decoration: BoxDecoration(
           color: context.surfaceBg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
             Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 24),
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
@@ -179,66 +191,88 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: widget.watch.platformColor.withValues(alpha: 0.1),
+                color: const Color(0xFF0064D2).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.open_in_new_rounded,
-                  color: widget.watch.platformColor, size: 28),
+              child: const Icon(Icons.open_in_new_rounded, color: Color(0xFF0064D2), size: 28),
             ),
             const SizedBox(height: 16),
             Text(
-              "Redirecting to ${widget.watch.platform}",
+              "Redirect to ${widget.watch.platform}",
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 20.sp,
                 fontWeight: FontWeight.w900,
                 color: context.textPrimaryColor,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
-              "We are navigating you to the external listing page on ${widget.watch.platform} to complete your trade.",
+              "Open this listing directly on ${widget.watch.platform} or copy the redirect link.",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: context.textSecondaryColor,
-                height: 1.5,
+              style: TextStyle(fontSize: 13.sp, color: context.textSecondaryColor),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: context.chipBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      url,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.sp, color: context.textPrimaryColor, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: url));
+                      Get.snackbar("Copied", "Listing link copied to clipboard");
+                    },
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 28),
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(seconds: 3),
-              builder: (context, value, _) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: value,
-                    minHeight: 6,
-                    color: widget.watch.platformColor,
-                    backgroundColor: context.chipBg,
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Get.back(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: context.borderColor),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text("Close", style: TextStyle(color: context.textPrimaryColor)),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: () => Get.back(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.primaryNav,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Get.back();
+                      final uri = Uri.tryParse(url);
+                      if (uri != null) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0064D2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text("Open Link", style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
-                  elevation: 0,
                 ),
-                child: const Text(
-                  "Return to App",
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                ),
-              ),
+              ],
             ),
           ],
         ),
@@ -268,8 +302,8 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
       priceVal * 1.00,
     ];
 
-    // Simulated "Similar Listings" data
-    final similarWatches = _getSimilarWatches();
+    // Similar Listings from live search results
+    final similarWatches = _search.searchResults.where((w) => w.id != watch.id).take(5).toList();
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -345,11 +379,12 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                         ),
 
                         // Similar Listings
-                        _buildAnimatedSection(
-                          slide: _similarSlide,
-                          fade: _similarFade,
-                          child: _buildSimilarListings(similarWatches),
-                        ),
+                        if (similarWatches.isNotEmpty)
+                          _buildAnimatedSection(
+                            slide: _similarSlide,
+                            fade: _similarFade,
+                            child: _buildSimilarListings(similarWatches),
+                          ),
 
                         const SizedBox(height: 100), // Bottom padding for CTA
                       ],
@@ -422,11 +457,22 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 50),
                 child: Hero(
                   tag: 'watch_${watch.id}',
-                  child: Image.asset(
-                    watch.imageUrl,
-                    fit: BoxFit.contain,
-                    height: 260,
-                  ),
+                  child: watch.imageUrl.startsWith('http')
+                      ? Image.network(
+                          watch.imageUrl,
+                          fit: BoxFit.contain,
+                          height: 260,
+                          errorBuilder: (context, error, stackTrace) => Image.asset(
+                            'assets/images/8.png',
+                            fit: BoxFit.contain,
+                            height: 260,
+                          ),
+                        )
+                      : Image.asset(
+                          watch.imageUrl,
+                          fit: BoxFit.contain,
+                          height: 260,
+                        ),
                 ),
               ),
             ),
@@ -440,11 +486,97 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
   // 2. TITLE SECTION
   // ==================================
   Widget _buildTitleSection(WatchModel watch) {
+    final bool isEbay = watch.isEbay;
+    final bool isInApp = watch.isInApp;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Marketplace Platform Tag & Redirect Link Option
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isEbay
+                      ? const Color(0xFF0064D2).withValues(alpha: 0.12)
+                      : (isInApp
+                          ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                          : watch.platformColor.withValues(alpha: 0.12)),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isEbay
+                        ? const Color(0xFF0064D2).withValues(alpha: 0.3)
+                        : (isInApp
+                            ? const Color(0xFFD97706).withValues(alpha: 0.3)
+                            : watch.platformColor.withValues(alpha: 0.3)),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isEbay
+                          ? Icons.shopping_bag_outlined
+                          : (isInApp ? Icons.verified_rounded : Icons.public_rounded),
+                      size: 13,
+                      color: isEbay
+                          ? const Color(0xFF0064D2)
+                          : (isInApp ? const Color(0xFFD97706) : watch.platformColor),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isEbay
+                          ? "EBAY MARKETPLACE"
+                          : (isInApp ? "IN-APP PEER LISTING" : watch.platform.toUpperCase()),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: isEbay
+                            ? const Color(0xFF0064D2)
+                            : (isInApp ? const Color(0xFFD97706) : watch.platformColor),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isEbay) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: _openRedirectLink,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0064D2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          "REDIRECT LINK",
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
           Text(
             watch.title,
             style: TextStyle(
@@ -740,7 +872,11 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "${watch.platform} Dealer",
+                      watch.isEbay
+                          ? "eBay Marketplace Seller"
+                          : (watch.isInApp
+                              ? (watch.ownerName != null ? "Trader • ${watch.ownerName}" : "In-App Verified Trader")
+                              : "${watch.platform} Dealer"),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -757,7 +893,9 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                         )),
                         const SizedBox(width: 6),
                         Text(
-                          "4.9/5 Rating (240+ sales)",
+                          watch.isEbay
+                              ? "eBay Top Rated (Verified)"
+                              : (watch.isInApp ? "Verified Community Trader" : "4.9/5 Rating (240+ sales)"),
                           style: TextStyle(
                             fontSize: 11,
                             color: context.textSecondaryColor,
@@ -1396,7 +1534,7 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                   ),
                   // Bookmark button
                   Obx(() {
-                    final isSaved = _bookmark.isBookmarked(watch.id!);
+                    final isSaved = _bookmark.isBookmarked(watch.idString);
                     return IconButton(
                       onPressed: () => _bookmark.toggleBookmark(watch),
                       icon: Container(
@@ -1522,9 +1660,8 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
       ),
     );
   }
-
   void _showBuyConfirmSheet() {
-    final buyerName = _auth.currentUser.value?.name ?? "Alexander Thorne";
+    final buyerName = _auth.currentUser.value?.name ?? "Collector";
     Get.bottomSheet(
       Container(
         decoration: BoxDecoration(
@@ -1573,7 +1710,16 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                       color: context.surfaceBg,
                       borderRadius: BorderRadius.circular(10.r),
                     ),
-                    child: Image.asset(widget.watch.imageUrl, fit: BoxFit.contain),
+                    child: widget.watch.imageUrl.startsWith('http')
+                        ? Image.network(
+                            widget.watch.imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Image.asset(
+                              'assets/images/8.png',
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : Image.asset(widget.watch.imageUrl, fit: BoxFit.contain),
                   ),
                   SizedBox(width: 12.w),
                   Expanded(
@@ -1667,8 +1813,14 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
   // BOTTOM CTA
   // ==================================
   Widget _buildBottomCTA(WatchModel watch) {
-    final bool isInApp = watch.platform == 'In-App' || watch.userId != null;
-    final bool isOwnListing = watch.userId == _auth.currentUser.value?.id;
+    final bool isInApp = watch.isInApp;
+    final currentUserId = _auth.currentUser.value?.backendId ?? _auth.currentUser.value?.id?.toString();
+    final currentUserName = _auth.currentUser.value?.name;
+    final bool isOwnListing = !watch.isEbay && (
+        (watch.userId != null && watch.userId == _auth.currentUser.value?.id) ||
+        (watch.ownerId != null && currentUserId != null && watch.ownerId == currentUserId) ||
+        (watch.ownerName != null && currentUserName != null && currentUserName.isNotEmpty && watch.ownerName == currentUserName)
+    );
 
     return Positioned(
       bottom: 0,
@@ -1692,15 +1844,36 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
         ),
         child: Row(
           children: [
-            // AR / 3D viewer button
-            Container(
-              width: 54.w,
-              height: 54.h,
-              decoration: BoxDecoration(
-                color: context.chipBg,
-                borderRadius: BorderRadius.circular(16.r),
+            // Left Action: Link/Redirect for eBay or Chat with Seller for in-app
+            InkWell(
+              onTap: watch.isEbay
+                  ? () => _showRedirectBottomSheet(watch.redirectUrl ?? 'https://www.ebay.com')
+                  : () {
+                      final sellerId = watch.ownerId ?? watch.userId?.toString() ?? watch.idString;
+                      final sellerTitle = watch.ownerName != null ? "Seller • ${watch.ownerName}" : "Seller • ${watch.brand} ${watch.model}";
+                      Get.to(() => ChatScreen(
+                        chatId: "seller_${sellerId.isNotEmpty ? sellerId : watch.brand.toLowerCase()}",
+                        title: sellerTitle,
+                        subtitle: "\$${watch.price.toStringAsFixed(0)} ${watch.currency} • ${watch.platform}",
+                      ));
+                    },
+              borderRadius: BorderRadius.circular(16.r),
+              child: Container(
+                width: 54.w,
+                height: 54.h,
+                decoration: BoxDecoration(
+                  color: context.chipBg,
+                  borderRadius: BorderRadius.circular(16.r),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Center(
+                  child: Icon(
+                    watch.isEbay ? Icons.link_rounded : Icons.chat_bubble_outline_rounded,
+                    size: 22.sp,
+                    color: watch.isEbay ? const Color(0xFF0064D2) : context.primaryNav,
+                  ),
+                ),
               ),
-              child: Icon(Icons.view_in_ar_rounded, size: 24, color: context.primaryNav),
             ),
             SizedBox(width: 14.w),
             // Main CTA button with pulse glow
@@ -1713,7 +1886,7 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                       borderRadius: BorderRadius.circular(16.r),
                       boxShadow: [
                         BoxShadow(
-                          color: context.primaryNav.withValues(
+                          color: (watch.isEbay ? const Color(0xFF0064D2) : context.primaryNav).withValues(
                             alpha: 0.15 + (0.1 * _pulseAnimation.value),
                           ),
                           blurRadius: 16 + (8 * _pulseAnimation.value),
@@ -1731,11 +1904,11 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                         ? null
                         : (_isSoldLocal
                             ? null
-                            : (isInApp ? _showBuyConfirmSheet : _simulatePlatformRedirect)),
+                            : (isInApp ? _showBuyConfirmSheet : _openRedirectLink)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isSoldLocal
                           ? (context.isDarkTheme ? Colors.grey.shade800 : Colors.grey.shade400)
-                          : context.primaryNav,
+                          : (watch.isEbay ? const Color(0xFF0064D2) : context.primaryNav),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: _isSoldLocal
                           ? (context.isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300)
@@ -1756,7 +1929,9 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                               ? "My Listing"
                               : (_isSoldLocal
                                   ? "SOLD"
-                                  : (isInApp ? "Buy Watch" : "Visit Listing")),
+                                  : (isInApp
+                                      ? "Buy Watch"
+                                      : (watch.isEbay ? "View on eBay" : "Visit Listing"))),
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 15.sp,
@@ -1768,7 +1943,7 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
                               ? Icons.check_circle_outline_rounded
                               : (_isSoldLocal
                                   ? Icons.lock_outline_rounded
-                                  : Icons.arrow_forward_rounded),
+                                  : (watch.isEbay ? Icons.open_in_new_rounded : Icons.arrow_forward_rounded)),
                           size: 18.sp,
                         ),
                       ],
@@ -1783,44 +1958,7 @@ class _WatchDetailScreenState extends State<WatchDetailScreen>
     );
   }
 
-  // ==================================
-  // HELPER: Similar watches data
-  // ==================================
-  List<WatchModel> _getSimilarWatches() {
-    final w = widget.watch;
-    final r = Random(w.id ?? 42);
 
-    final brands = ['Omega', 'Tudor', 'Rolex', 'Cartier', 'Patek Philippe'];
-    final models = ['Seamaster 300M', 'Black Bay Heritage', 'Daytona', 'Tank Must', 'Nautilus'];
-    final titles = [
-      'Omega Seamaster 300M Blue Dial',
-      'Tudor Black Bay Heritage 41mm',
-      'Rolex Daytona Panda Dial',
-      'Cartier Tank Must Large WSTA0040',
-      'Patek Philippe Nautilus 5711/1A',
-    ];
-
-    // Pick 4 different ones
-    List<WatchModel> similar = [];
-    final indices = List.generate(5, (i) => i)..shuffle(r);
-    for (int i = 0; i < min(4, indices.length); i++) {
-      final idx = indices[i];
-      similar.add(WatchModel(
-        id: 900 + idx,
-        brand: brands[idx],
-        model: models[idx],
-        title: titles[idx],
-        price: 3500 + r.nextDouble() * 12000,
-        platform: ['Chrono24', 'eBay', 'Grailzee'][r.nextInt(3)],
-        year: 2020 + r.nextInt(5),
-        condition: ['New', 'Mint', 'Very Good'][r.nextInt(3)],
-        location: ['USA', 'Germany', 'Japan'][r.nextInt(3)],
-        isSold: false,
-        timestamp: DateTime.now().toIso8601String(),
-      ));
-    }
-    return similar;
-  }
 }
 
 // Background painter for hero section - subtle concentric circles

@@ -10,14 +10,14 @@ class ApiEndpoints {
 
   // Users & Preferences
   static const String userMe = '/users/me';
-  static const String userMyProfile = '/users/my-profile';
-  static const String userUpdateProfile = '/users/update-profile';
+  static const String userMyProfile = '/users/me';
+  static const String userUpdateProfile = '/users/me';
   static const String userUpdateFcmToken = '/users/update-fcm-token';
-  static const String userDeleteMyAccount = '/users/delete-my-account';
+  static const String userDeleteMyAccount = '/users/me';
   static const String userPreferences = '/users/me/preferences';
   static const String userDarkMode = '/users/me/dark-mode';
   static const String userAvatar = '/users/me/avatar';
-  static const String userProfileAnalytics = '/users/get-profile-analytics';
+  static const String userProfileAnalytics = '/users/me/stats';
 
   // Search & Discovery
   static const String search = '/search';
@@ -38,15 +38,15 @@ class ApiEndpoints {
 
   // Listings, Posts & Trader Hub
   static const String listings = '/listings';
-  static const String myListings = '/me/listings';
-  static const String posts = '/posts';
-  static const String postsCreate = '/posts/create-post';
-  static const String postsGetAll = '/posts/get-all-posts';
-  static const String postsMy = '/posts/my-posts';
-  static const String postsView = '/posts/view-post';
-  static const String postsDelete = '/posts/delete-post';
-  static const String postsToggleSave = '/posts/toggle-save';
-  static const String postsSaved = '/posts/saved-posts';
+  static const String myListings = '/listings';
+  static const String posts = '/listings';
+  static const String postsCreate = '/listings';
+  static const String postsGetAll = '/listings';
+  static const String postsMy = '/listings';
+  static const String postsView = '/listings';
+  static const String postsDelete = '/listings';
+  static const String postsToggleSave = '/saved-products';
+  static const String postsSaved = '/saved-products';
   static const String traderCollection = '/trader-collection';
   static const String traderFeatured = '/trader-collection/featured';
 
@@ -58,7 +58,8 @@ class ApiEndpoints {
   static const String analyticsPriceTrend = '/analytics/watch-models';
 
   // Bookmarks & Saved Searches
-  static const String savedListings = '/me/saved-listings';
+  static const String savedProducts = '/saved-products';
+  static const String savedListings = '/saved-products';
   static const String savedSearches = '/saved-searches';
 
   // Notifications & Alerts
@@ -77,9 +78,9 @@ class ApiEndpoints {
   static const String paymentsCheckout = '/payments/create-checkout-session';
   static const String paymentsTransactions = '/payments/my-transactions';
 
-  // Real-Time Chat & Messaging
-  static const String chats = '/chats';
-  static const String messages = '/messages';
+  // Real-Time Chat & Messaging (Support Tickets / Messaging Gateway)
+  static const String chats = '/support/tickets';
+  static const String messages = '/support/tickets';
 
   // eBay Marketplace
   static const String ebayStatus = '/ebay/status';

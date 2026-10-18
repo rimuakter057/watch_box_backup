@@ -36,4 +36,35 @@ class AlertModel {
       'is_read': isRead ? 1 : 0,
     };
   }
+
+  AlertModel copyWith({
+    int? id,
+    int? userId,
+    String? type,
+    String? message,
+    String? timestamp,
+    bool? isRead,
+  }) {
+    return AlertModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      type: type ?? this.type,
+      message: message ?? this.message,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+
+  String get title {
+    switch (type.toLowerCase()) {
+      case 'price_drop':
+        return 'Price Drop Alert';
+      case 'new_listing':
+        return 'New Listing Alert';
+      case 'saved_search_update':
+        return 'Search Update';
+      default:
+        return 'Watch Alert';
+    }
+  }
 }

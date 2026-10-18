@@ -8,7 +8,8 @@ import '../../../models/watch_model.dart';
 import '../../../models/search_query_model.dart';
 import '../watch_detail_screen.dart';
 import '../../widgets/watch_background.dart';
-import '../../../core/db/db_helper.dart';
+import '../../../core/prefs/pref_manager.dart';
+import '../../../core/network/api_client.dart';
 
 class BookmarksTab extends StatefulWidget {
   const BookmarksTab({super.key});
@@ -20,7 +21,6 @@ class BookmarksTab extends StatefulWidget {
 class _BookmarksTabState extends State<BookmarksTab> with SingleTickerProviderStateMixin {
   final BookmarkController _bookmark = Get.find<BookmarkController>();
   final WatchSearchController _search = Get.find<WatchSearchController>();
-  final DbHelper _dbHelper = DbHelper();
   
   late TabController _tabController;
   
@@ -76,30 +76,31 @@ class _BookmarksTabState extends State<BookmarksTab> with SingleTickerProviderSt
     );
   }
 
-  // Toggle active alert in local SQLite database
+  // Toggle active alert on backend API
   Future<void> _toggleSavedSearchAlert(SearchQueryModel sSearch) async {
+    final pref = Get.find<PrefManager>();
+    if (!pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot toggle alert notifications: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to manage search alerts.");
+      return;
+    }
+
     final filters = sSearch.filters;
     final bool current = filters['alertsEnabled'] ?? false;
-    final updatedFilters = Map<String, dynamic>.from(filters);
-    updatedFilters['alertsEnabled'] = !current;
-    updatedFilters['alertStatus'] = !current ? 'Price Drop Alerts Enabled' : 'Push Notifications Off';
+    final endpoint = !current ? '/saved-searches/${sSearch.id}/alerts/enable' : '/saved-searches/${sSearch.id}/alerts/disable';
     
-    final db = await _dbHelper.database;
-    await db.update(
-      'saved_searches',
-      {'filters_json': jsonEncode(updatedFilters)},
-      where: 'id = ?',
-      whereArgs: [sSearch.id],
-    );
-    
-    _bookmark.fetchSavedSearches();
-    Get.snackbar(
-      "Alert State Toggled",
-      !current ? "Push notifications enabled for this query." : "Push notifications muted.",
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: context.surfaceBg.withValues(alpha: 0.9),
-      colorText: context.textPrimaryColor,
-    );
+    final res = await ApiClient.to.safePost(endpoint, {});
+    if (res.isOk) {
+      _bookmark.fetchSavedSearches();
+      Get.snackbar(
+        "Alert State Toggled",
+        !current ? "Push notifications enabled for this query." : "Push notifications muted.",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } else {
+      debugPrint("❌ [BOOKMARKS ERROR] Toggle saved search alerts rejected by backend / not authorized. No fallback.");
+      Get.snackbar("Error", "Could not toggle alert on server.");
+    }
   }
 
   // Options bottom sheet for saved search card
@@ -148,8 +149,9 @@ class _BookmarksTabState extends State<BookmarksTab> with SingleTickerProviderSt
               leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: const Text("Delete Saved Search", style: TextStyle(color: Colors.red)),
               onTap: () {
-                Get.back();
-                _bookmark.removeSavedSearch(sSearch.id!);
+                if (sSearch.id != null) {
+                  _bookmark.removeSavedSearch(sSearch.id!);
+                }
               },
             ),
           ],
@@ -382,12 +384,25 @@ class _BookmarksTabState extends State<BookmarksTab> with SingleTickerProviderSt
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  watchUrl,
-                  width: 70,
-                  height: 70,
-                  fit: BoxFit.cover,
-                ),
+                child: watchUrl.startsWith('http')
+                    ? Image.network(
+                        watchUrl,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Image.asset(
+                          'assets/images/8.png',
+                          width: 70,
+                          height: 70,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Image.asset(
+                        watchUrl,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(

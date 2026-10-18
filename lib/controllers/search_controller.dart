@@ -6,7 +6,6 @@ import '../core/prefs/pref_manager.dart';
 import '../core/theme/app_colors.dart';
 import '../models/watch_model.dart';
 import 'auth_controller.dart';
-import 'alert_controller.dart';
 import '../core/network/services/search_api_service.dart';
 import '../core/network/services/listings_api_service.dart';
 
@@ -57,8 +56,6 @@ class WatchSearchController extends GetxController {
   final RxBool filterShowSold = false.obs; // false = Active only, true = Sold only
   final RxString filterTimeRange = 'All Time'.obs; // 'All Time', '30 Days', '90 Days'
 
-  // Image search simulator
-  final RxString simulatedImagePath = ''.obs;
 
   // Analytics outputs for selected search/watch
   final RxDouble minPrice = 0.0.obs;
@@ -201,109 +198,22 @@ class WatchSearchController extends GetxController {
         platforms: activePlatforms,
       );
 
-      if (liveResults != null && liveResults.isNotEmpty) {
+      if (liveResults != null) {
         searchResults.assignAll(liveResults);
         _calculateAnalytics(liveResults);
         await _logSearch(keyword);
-        isLoading.value = false;
+        debugPrint("✅ [SEARCH CONTROLLER] Found ${liveResults.length} search results from backend.");
         return true;
-      }
-    } catch (e) {
-      print("Live search fallback to SQLite: ");
-    }
-
-    try {
-      final db = await _dbHelper.database;
-      
-      // Build search query with filters
-      String query = "SELECT * FROM listings WHERE 1=1";
-      List<dynamic> arguments = [];
-
-      // Keyword search
-      if (keyword.isNotEmpty) {
-        query += " AND (title LIKE ? OR brand LIKE ? OR model LIKE ?)";
-        arguments.add('%$keyword%');
-        arguments.add('%$keyword%');
-        arguments.add('%$keyword%');
-      }
-
-      // Platforms filter (eBay, Chrono24, Grailzee)
-      // Checks both checking status & admin disable toggles
-      List<String> activePlatforms = [];
-      if (searchEbay.value && _pref.ebayEnabled) activePlatforms.add('eBay');
-      if (searchChrono24.value && _pref.chrono24Enabled) activePlatforms.add('Chrono24');
-      if (searchGrailzee.value && _pref.grailzeeEnabled) activePlatforms.add('Grailzee');
-
-      if (activePlatforms.isEmpty) {
+      } else {
+        debugPrint("❌ [SEARCH ERROR] Search request returned null from backend. No fallback.");
         searchResults.clear();
         _calculateAnalytics([]);
-        isLoading.value = false;
-        return true;
+        return false;
       }
-
-      query += " AND platform IN (${activePlatforms.map((p) => '?').join(', ')})";
-      arguments.addAll(activePlatforms);
-
-      // Advanced Filters
-      // 1. Year filters (Free plan only has basic filters, so year/condition filters are ignored if user is free, mimicking premium lock)
-      final bool hasAdvancedFilter = user.plan == 'paid' || user.isAdmin;
-      
-      if (hasAdvancedFilter) {
-        if (filterYearMin.value != null) {
-          query += " AND year >= ?";
-          arguments.add(filterYearMin.value);
-        }
-        if (filterYearMax.value != null) {
-          query += " AND year <= ?";
-          arguments.add(filterYearMax.value);
-        }
-        if (filterLocation.value.isNotEmpty) {
-          query += " AND location = ?";
-          arguments.add(filterLocation.value);
-        }
-        if (filterCondition.value.isNotEmpty) {
-          query += " AND condition = ?";
-          arguments.add(filterCondition.value);
-        }
-        if (filterTimeRange.value != 'All Time') {
-          final days = filterTimeRange.value == '30 Days' ? 30 : 90;
-          final cutoff = DateTime.now().subtract(Duration(days: days)).toIso8601String();
-          query += " AND timestamp >= ?";
-          arguments.add(cutoff);
-        }
-      }
-
-      // 2. Sold vs Active filter (also an advanced filter)
-      if (hasAdvancedFilter) {
-        query += " AND is_sold = ?";
-        arguments.add(filterShowSold.value ? 1 : 0);
-      } else {
-        // Free users always see Active listings only
-        query += " AND is_sold = 0";
-      }
-
-      // 3. Price Filter
-      if (filterPriceMin.value != null) {
-        query += " AND price >= ?";
-        arguments.add(filterPriceMin.value);
-      }
-      if (filterPriceMax.value != null) {
-        query += " AND price <= ?";
-        arguments.add(filterPriceMax.value);
-      }
-
-      final List<Map<String, dynamic>> resultsMaps = await db.rawQuery(query, arguments);
-      final List<WatchModel> fetchedList = resultsMaps.map((map) => WatchModel.fromMap(map)).toList();
-
-      searchResults.assignAll(fetchedList);
-      _calculateAnalytics(fetchedList);
-
-      // Log the search
-      await _logSearch(keyword);
-
-      return true;
     } catch (e) {
-      print("Search query failed: $e");
+      debugPrint("❌ [SEARCH ERROR] Live search error: $e. No fallback.");
+      searchResults.clear();
+      _calculateAnalytics([]);
       return false;
     } finally {
       isLoading.value = false;
@@ -366,18 +276,12 @@ class WatchSearchController extends GetxController {
     }
   }
 
-  // Simulated Image Search Action
-  Future<void> runSimulatedImageSearch(String brand) async {
-    simulatedImagePath.value = "assets/images/watches/${brand.toLowerCase()}.jpg";
-    await executeSearch(brand, isImageSearch: true);
-  }
-
   // Custom UI Dialog for Plan Upgrade
   Widget _buildUpgradeDialog() {
-    return androidxUpgradeDialogMock();
+    return _buildUpgradeDialogWidget();
   }
 
-  Widget androidxUpgradeDialogMock() {
+  Widget _buildUpgradeDialogWidget() {
     return GetPlatform.isIOS 
     ? _cupertinoStyleDialog() 
     : _materialStyleDialog();
@@ -473,191 +377,158 @@ class WatchSearchController extends GetxController {
       if (liveList != null && liveList.isNotEmpty) {
         return liveList;
       }
+      final all = await _listingsApi.getListings(page: 1, limit: 50);
+      if (all != null && all.isNotEmpty) {
+        return all;
+      }
+      debugPrint("❌ [LISTINGS ERROR] Failed to fetch trader listings / null response. No fallback.");
+      return [];
     } catch (e) {
-      print("Live trader listings fallback to SQLite: ");
-    }
-    try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'listings',
-        where: 'platform = ? AND is_sold = 0',
-        whereArgs: ['In-App'],
-        orderBy: 'timestamp DESC',
-      );
-      return maps.map((map) => WatchModel.fromMap(map)).toList();
-    } catch (e) {
-      print("Error loading trader listings: $e");
+      debugPrint("❌ [LISTINGS ERROR] Error loading trader listings: $e. No fallback.");
       return [];
     }
   }
 
   Future<List<WatchModel>> getUserListings({required bool isSold}) async {
+    final pref = Get.find<PrefManager>();
+    if (!pref.hasToken) {
+      debugPrint("❌ [LISTINGS ERROR] Cannot fetch user listings: User not authorized (no access token). No fallback.");
+      return [];
+    }
+
     try {
       final liveList = await _listingsApi.getMyListings(status: isSold ? 'sold' : 'active');
-      if (liveList != null && liveList.isNotEmpty) {
+      if (liveList != null) {
         return liveList;
       }
+      debugPrint("❌ [LISTINGS ERROR] Failed to fetch user listings / not authorized. No fallback.");
+      return [];
     } catch (e) {
-      print("Live user listings fallback to SQLite: ");
-    }
-    final user = _auth.currentUser.value;
-    if (user == null || user.id == null) return [];
-    try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'listings',
-        where: 'user_id = ? AND is_sold = ?',
-        whereArgs: [user.id, isSold ? 1 : 0],
-        orderBy: 'timestamp DESC',
-      );
-      return maps.map((map) => WatchModel.fromMap(map)).toList();
-    } catch (e) {
-      print("Error loading user listings: $e");
+      debugPrint("❌ [LISTINGS ERROR] Error loading user listings: $e. No fallback.");
       return [];
     }
   }
 
   Future<bool> createCustomListing({
+    required String title,
     required String brand,
     required String model,
-    required String title,
     required double price,
-    required int year,
-    required String condition,
-    required String location,
+    String currency = 'USD',
+    String? referenceNumber,
+    int? year,
+    String? condition,
+    String? description,
+    String? location,
+    List<int>? imageBytes,
+    String? imageName,
   }) async {
-    final user = _auth.currentUser.value;
-    if (user == null || user.id == null) return false;
-
-    try {
-      await _listingsApi.createListing({
-        'brand': brand,
-        'model': model,
-        'title': title,
-        'price': price,
-        'year': year,
-        'condition': condition,
-        'location': location,
-        'platform': 'In-App',
-      });
-    } catch (e) {
-      print("Backend createListing sync failed: ");
+    if (!_pref.hasToken) {
+      debugPrint("❌ [LISTINGS ERROR] Cannot create listing: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to create listings.");
+      return false;
     }
 
     try {
-      final db = await _dbHelper.database;
-      await db.insert('listings', {
-        'user_id': user.id,
+      final Map<String, dynamic> payload = {
         'title': title,
         'brand': brand,
         'model': model,
         'price': price,
-        'platform': 'In-App',
-        'year': year,
-        'condition': condition,
-        'location': location,
-        'is_sold': 0,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-      return true;
+        'currency': currency,
+        'platform': 'in-app',
+      };
+      if (referenceNumber != null && referenceNumber.trim().isNotEmpty) {
+        payload['referenceNumber'] = referenceNumber.trim();
+      }
+      if (year != null && year > 0) {
+        payload['year'] = year;
+      }
+      if (condition != null && condition.trim().isNotEmpty) {
+        payload['condition'] = condition.trim();
+      }
+      if (description != null && description.trim().isNotEmpty) {
+        payload['description'] = description.trim();
+      }
+      if (location != null && location.trim().isNotEmpty) {
+        payload['location'] = location.trim();
+      }
+
+      final res = await _listingsApi.createListing(
+        payload,
+        imageBytes: imageBytes,
+        filename: imageName,
+      );
+      if (res != null) {
+        debugPrint("✅ [SEARCH CONTROLLER] Custom listing created successfully on backend.");
+        Get.snackbar("Success", "Listing created successfully.");
+        return true;
+      } else {
+        debugPrint("❌ [LISTINGS ERROR] Listing creation rejected by backend / conflict. No fallback.");
+        Get.snackbar("Error", "Could not create listing. Title must be unique or session may need refresh.");
+        return false;
+      }
     } catch (e) {
-      print("Error creating custom listing: $e");
+      debugPrint("❌ [LISTINGS ERROR] Error creating listing: $e. No fallback.");
+      Get.snackbar("Error", "Server error creating listing: $e");
       return false;
     }
   }
 
   Future<bool> buyListing(WatchModel watch, String buyerName) async {
-    if (watch.id == null) return false;
-    try {
-      // 1. Live backend purchase & mark sold
-      try {
-        await _listingsApi.purchaseListing(watch.id.toString(), price: watch.price, buyerName: buyerName);
-        await _listingsApi.markListingSold(watch.id.toString());
-      } catch (e) {
-        print("Backend purchase sync: $e");
-      }
+    final targetId = watch.idString;
+    if (targetId.isEmpty) return false;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [PURCHASE ERROR] Cannot buy listing: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to make purchases.");
+      return false;
+    }
 
-      final db = await _dbHelper.database;
-      
-      // 1. Mark listing as sold
-      await db.update(
-        'listings',
-        {'is_sold': 1},
-        where: 'id = ?',
-        whereArgs: [watch.id],
-      );
-      
-      // 2. Generate system alert/notification for the seller
-      if (watch.userId != null) {
-        final nowStr = DateTime.now().toIso8601String();
-        await db.insert('alerts', {
-          'user_id': watch.userId,
-          'type': 'sold_notification',
-          'message': 'Congrats! Your listing "${watch.title}" has been purchased by $buyerName.',
-          'timestamp': nowStr,
-          'is_read': 0,
-        });
-        
-        // Trigger refresh on AlertController if active
-        try {
-          final alertCtrl = Get.find<AlertController>();
-          alertCtrl.fetchAlerts();
-        } catch (_) {}
+    try {
+      final bought = await _listingsApi.purchaseListing(targetId, price: watch.price, buyerName: buyerName);
+      if (!bought) {
+        debugPrint("❌ [PURCHASE ERROR] Purchase rejected by backend / not authorized. No fallback.");
+        Get.snackbar("Purchase Failed", "Could not complete purchase on server.");
+        return false;
       }
-      
+      await _listingsApi.markListingSold(targetId);
+      debugPrint("✅ [SEARCH CONTROLLER] Listing purchase completed on backend.");
+      Get.snackbar("Success", "Listing purchased successfully!");
       return true;
     } catch (e) {
-      print("Error purchasing listing: $e");
+      debugPrint("❌ [PURCHASE ERROR] Purchase error: $e. No fallback.");
+      Get.snackbar("Error", "Purchase error: $e");
       return false;
     }
   }
 
   Future<bool> generateInvoice({
-    required int listingId,
+    required String listingId,
     required String buyerName,
     required String buyerEmail,
     required double price,
   }) async {
-    try {
-      final db = await _dbHelper.database;
-      final invoiceNo = 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
-      final dateStr = DateTime.now().toIso8601String().substring(0, 10);
-      
-      await db.insert('invoices', {
-        'listing_id': listingId,
-        'buyer_name': buyerName,
-        'buyer_email': buyerEmail,
-        'invoice_no': invoiceNo,
-        'date': dateStr,
-        'price': price,
-      });
-      return true;
-    } catch (e) {
-      print("Error generating invoice: $e");
+    if (!_pref.hasToken) {
+      debugPrint("❌ [INVOICE ERROR] Cannot generate invoice: User not authorized (no access token). No fallback.");
       return false;
     }
+    return true;
   }
 
-  Future<Map<String, dynamic>?> getInvoice(int listingId) async {
+  Future<Map<String, dynamic>?> getInvoice(String listingId) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [INVOICE ERROR] Cannot get invoice: User not authorized (no access token). No fallback.");
+      return null;
+    }
     try {
-      // 1. Live API invoice fetch
-      try {
-        final liveInvoice = await _listingsApi.getInvoice(listingId.toString());
-        if (liveInvoice != null && liveInvoice.isNotEmpty) return liveInvoice;
-      } catch (_) {}
-
-      // 2. Local fallback
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'invoices',
-        where: 'listing_id = ?',
-        whereArgs: [listingId],
-        limit: 1,
-      );
-      if (maps.isNotEmpty) return maps.first;
+      final liveInvoice = await _listingsApi.getInvoice(listingId);
+      if (liveInvoice != null && liveInvoice.isNotEmpty) {
+        return liveInvoice;
+      }
+      debugPrint("❌ [INVOICE ERROR] Invoice not found on backend. No fallback.");
       return null;
     } catch (e) {
-      print("Error loading invoice: $e");
+      debugPrint("❌ [INVOICE ERROR] Error loading invoice: $e. No fallback.");
       return null;
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/theme/app_colors.dart';
 import '../../controllers/alert_controller.dart';
+import '../../models/alert_model.dart';
 
 class ActivityNotificationsScreen extends StatefulWidget {
   const ActivityNotificationsScreen({super.key});
@@ -11,78 +12,13 @@ class ActivityNotificationsScreen extends StatefulWidget {
 }
 
 class _ActivityNotificationsScreenState extends State<ActivityNotificationsScreen> with SingleTickerProviderStateMixin {
+  final AlertController _alert = Get.find<AlertController>();
   late AnimationController _listAnimController;
-
-  // Exact mockup notifications list
-  final List<Map<String, dynamic>> _todayItems = [
-    {
-      "id": 1,
-      "type": "price_drop",
-      "title": "Price Drop Alert",
-      "message": "The Rolex Submariner 126610LN you followed has dropped by 4.2% to \$12,450.",
-      "time": "2h ago",
-      "image": "assets/images/5.png", // Submariner
-      "hasButton": true,
-      "buttonText": "SEE ANALYSIS",
-      "isOutlineButton": false,
-      "isRead": false,
-    },
-    {
-      "id": 2,
-      "type": "market_shift",
-      "title": "Market Shift",
-      "message": "Patek Philippe Nautilus references are seeing increased volume. Check updated valuations.",
-      "time": "5h ago",
-      "icon": Icons.trending_up_rounded,
-      "iconBg": const Color(0xFF002952),
-      "hasButton": false,
-      "isRead": false,
-    }
-  ];
-
-  final List<Map<String, dynamic>> _yesterdayItems = [
-    {
-      "id": 3,
-      "type": "new_listing",
-      "title": "New Listing Match",
-      "message": "A Mint Condition Omega Speedmaster Moonwatch just entered the market at \$6,200.",
-      "time": "1d ago",
-      "image": "assets/images/1.png", // Speedmaster
-      "hasButton": true,
-      "buttonText": "VIEW LISTING",
-      "isOutlineButton": true,
-      "isRead": true,
-    }
-  ];
-
-  final List<Map<String, dynamic>> _olderItems = [
-    {
-      "id": 4,
-      "type": "security",
-      "title": "Security Alert",
-      "message": "Your account was accessed from a new device in Geneva, Switzerland.",
-      "time": "3d ago",
-      "icon": Icons.person_outline_rounded,
-      "iconBg": const Color(0xFFEFF6FF),
-      "iconColor": const Color(0xFF2563EB),
-      "isRead": true,
-    },
-    {
-      "id": 5,
-      "type": "portfolio",
-      "title": "Portfolio Update",
-      "message": "Your total collection value has increased by \$2,840 this month.",
-      "time": "1w ago",
-      "icon": Icons.bookmark_outline_rounded,
-      "iconBg": const Color(0xFFEFF6FF),
-      "iconColor": const Color(0xFF2563EB),
-      "isRead": true,
-    }
-  ];
 
   @override
   void initState() {
     super.initState();
+    _alert.fetchAlerts();
     _listAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -96,20 +32,7 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
   }
 
   void _markAllAsRead() {
-    try {
-      Get.find<AlertController>().markAllAsRead();
-    } catch (_) {}
-    setState(() {
-      for (var item in _todayItems) {
-        item["isRead"] = true;
-      }
-      for (var item in _yesterdayItems) {
-        item["isRead"] = true;
-      }
-      for (var item in _olderItems) {
-        item["isRead"] = true;
-      }
-    });
+    _alert.markAllAsRead();
     Get.snackbar(
       "Marked All",
       "All notifications marked as read.",
@@ -117,6 +40,24 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
       backgroundColor: context.primaryNav,
       colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
     );
+  }
+
+  String _formatTimeAgo(String timestamp) {
+    try {
+      final date = DateTime.parse(timestamp);
+      final diff = DateTime.now().difference(date);
+      if (diff.inMinutes < 60) {
+        return "${diff.inMinutes}m ago";
+      } else if (diff.inHours < 24) {
+        return "${diff.inHours}h ago";
+      } else if (diff.inDays < 7) {
+        return "${diff.inDays}d ago";
+      } else {
+        return "${(diff.inDays / 7).floor()}w ago";
+      }
+    } catch (_) {
+      return "recently";
+    }
   }
 
   @override
@@ -151,44 +92,57 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // TODAY SECTION
-            if (_todayItems.isNotEmpty) ...[
-              _buildSectionHeader("TODAY"),
-              ...List.generate(_todayItems.length, (idx) {
-                final item = _todayItems[idx];
-                return _buildAnimatedCard(item, idx, 0);
-              }),
-              const SizedBox(height: 20),
-            ],
+      body: Obx(() {
+        if (_alert.isLoading.value) {
+          return Center(
+            child: CircularProgressIndicator(color: context.primaryNav),
+          );
+        }
 
-            // YESTERDAY SECTION
-            if (_yesterdayItems.isNotEmpty) ...[
-              _buildSectionHeader("YESTERDAY"),
-              ...List.generate(_yesterdayItems.length, (idx) {
-                final item = _yesterdayItems[idx];
-                return _buildAnimatedCard(item, idx, _todayItems.length);
-              }),
-              const SizedBox(height: 20),
-            ],
+        final alerts = _alert.alertsList;
+        if (alerts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.notifications_none_rounded, size: 64, color: context.borderColor),
+                const SizedBox(height: 16),
+                Text(
+                  "No notifications yet",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "You're all caught up with market updates and price drops.",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.textSecondaryColor,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
-            // OLDER SECTION
-            if (_olderItems.isNotEmpty) ...[
-              _buildSectionHeader("OLDER"),
-              ...List.generate(_olderItems.length, (idx) {
-                final item = _olderItems[idx];
-                return _buildAnimatedCard(item, idx, _todayItems.length + _yesterdayItems.length);
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader("ACTIVITY ALERTS"),
+              ...List.generate(alerts.length, (idx) {
+                final alert = alerts[idx];
+                return _buildAnimatedCard(alert, idx);
               }),
-              const SizedBox(height: 20),
             ],
-          ],
-        ),
-      ),
+          ),
+        );
+      }),
     );
   }
 
@@ -207,22 +161,21 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
     );
   }
 
-  Widget _buildAnimatedCard(Map<String, dynamic> item, int index, int offset) {
-    final int delay = offset + index;
-    final double start = delay * 0.1;
-    final double end = start + 0.5;
+  Widget _buildAnimatedCard(AlertModel alert, int index) {
+    final double start = (index * 0.08).clamp(0.0, 0.6);
+    final double end = (start + 0.4).clamp(0.0, 1.0);
 
     final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _listAnimController,
-        curve: Interval(start.clamp(0.0, 1.0), end.clamp(0.0, 1.0), curve: Curves.easeOutBack),
+        curve: Interval(start, end, curve: Curves.easeOutBack),
       ),
     );
 
     final slideAnimation = Tween<Offset>(begin: const Offset(0.0, 0.25), end: Offset.zero).animate(
       CurvedAnimation(
         parent: _listAnimController,
-        curve: Interval(start.clamp(0.0, 1.0), end.clamp(0.0, 1.0), curve: Curves.easeOut),
+        curve: Interval(start, end, curve: Curves.easeOut),
       ),
     );
 
@@ -230,14 +183,14 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
       opacity: animation,
       child: SlideTransition(
         position: slideAnimation,
-        child: _buildNotificationCard(item),
+        child: _buildNotificationCard(alert),
       ),
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> item) {
-    final bool isRead = item["isRead"] ?? true;
-    final bool hasBtn = item["hasButton"] ?? false;
+  Widget _buildNotificationCard(AlertModel alert) {
+    final bool isRead = alert.isRead;
+    final bool hasBtn = alert.type == 'price_drop' || alert.type == 'new_listing';
 
     return Card(
       color: context.cardBg,
@@ -247,202 +200,174 @@ class _ActivityNotificationsScreenState extends State<ActivityNotificationsScree
         side: BorderSide(color: context.borderColor, width: 1.0),
       ),
       elevation: 0,
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon / Watch Avatar
-                _buildAvatar(item),
-                const SizedBox(width: 14),
-
-                // Content Column
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            item["title"],
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: context.textPrimaryColor,
+      child: InkWell(
+        onTap: () {
+          if (!alert.isRead && alert.id != null) {
+            _alert.markAsRead(alert.id!);
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildAvatar(alert),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                alert.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: context.textPrimaryColor,
+                                ),
+                              ),
                             ),
-                          ),
-                          Text(
-                            item["time"],
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: context.textSecondaryColor,
+                            Text(
+                              _formatTimeAgo(alert.timestamp),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: context.textSecondaryColor,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        item["message"],
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: context.textSecondaryColor,
-                          height: 1.4,
+                          ],
                         ),
-                      ),
-                      if (hasBtn) ...[
-                        const SizedBox(height: 12),
-                        _buildButton(item),
+                        const SizedBox(height: 6),
+                        Text(
+                          alert.message,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: context.textSecondaryColor,
+                            height: 1.4,
+                          ),
+                        ),
+                        if (hasBtn) ...[
+                          const SizedBox(height: 12),
+                          _buildButton(alert),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          
-          // Unread Blue Dot
-          Positioned(
-            top: 16,
-            right: 16,
-            child: AnimatedOpacity(
-              opacity: isRead ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.easeInOut,
-              child: AnimatedScale(
-                scale: isRead ? 0.0 : 1.0,
+            Positioned(
+              top: 16,
+              right: 16,
+              child: AnimatedOpacity(
+                opacity: isRead ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutBack,
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: context.primaryNav,
-                    shape: BoxShape.circle,
+                curve: Curves.easeInOut,
+                child: AnimatedScale(
+                  scale: isRead ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutBack,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: context.primaryNav,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildAvatar(Map<String, dynamic> item) {
-    final hasImg = item.containsKey("image");
-    
-    if (hasImg) {
-      return Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: context.borderColor),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Image.asset(
-          item["image"],
-          fit: BoxFit.cover,
-        ),
-      );
-    } else {
-      final bool isDark = context.isDarkTheme;
-      final Color bg = isDark
-          ? (item["iconBg"] == const Color(0xFFEFF6FF)
-              ? const Color(0xFF1E3A8A)
-              : const Color(0xFF334155))
-          : (item["iconBg"] ?? const Color(0xFFEFF6FF));
-      final Color fg = isDark
-          ? (item["iconColor"] == const Color(0xFF2563EB)
-              ? const Color(0xFF93C5FD)
-              : Colors.white)
-          : (item["iconColor"] ?? Colors.white);
-      return Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(
-          item["icon"],
-          color: fg,
-          size: 20,
-        ),
-      );
+  Widget _buildAvatar(AlertModel alert) {
+    IconData icon;
+    Color bg;
+    Color fg;
+
+    switch (alert.type.toLowerCase()) {
+      case 'price_drop':
+        icon = Icons.trending_down_rounded;
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF2563EB);
+        break;
+      case 'market_shift':
+      case 'market_insight':
+        icon = Icons.trending_up_rounded;
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFFD97706);
+        break;
+      case 'new_listing':
+        icon = Icons.watch_rounded;
+        bg = const Color(0xFFECFDF5);
+        fg = const Color(0xFF10B981);
+        break;
+      case 'security':
+        icon = Icons.shield_outlined;
+        bg = const Color(0xFFFEF2F2);
+        fg = const Color(0xFFEF4444);
+        break;
+      default:
+        icon = Icons.notifications_rounded;
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF2563EB);
     }
+
+    final bool isDark = context.isDarkTheme;
+    if (isDark) {
+      bg = const Color(0xFF1E293B);
+    }
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        icon,
+        color: fg,
+        size: 20,
+      ),
+    );
   }
 
-  Widget _buildButton(Map<String, dynamic> item) {
-    final bool isOutline = item["isOutlineButton"] ?? false;
-    final String text = item["buttonText"];
-
-    if (isOutline) {
-      return SizedBox(
-        height: 32,
-        child: OutlinedButton(
-          onPressed: () {
-            setState(() {
-              item["isRead"] = true;
-            });
-            Get.snackbar(
-              "Redirecting",
-              "Opening listing details panel...",
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: context.primaryNav,
-              colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: context.primaryNav),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: context.primaryNav,
-            ),
+  Widget _buildButton(AlertModel alert) {
+    return SizedBox(
+      height: 32,
+      child: ElevatedButton(
+        onPressed: () {
+          if (!alert.isRead && alert.id != null) {
+            _alert.markAsRead(alert.id!);
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: context.primaryNav,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          elevation: 0,
+        ),
+        child: Text(
+          "VIEW DETAILS",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
           ),
         ),
-      );
-    } else {
-      return SizedBox(
-        height: 32,
-        child: ElevatedButton(
-          onPressed: () {
-            setState(() {
-              item["isRead"] = true;
-            });
-            Get.snackbar(
-              "Opening Analysis",
-              "Loading market charts & trend evaluation...",
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: context.primaryNav,
-              colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: context.primaryNav,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            elevation: 0,
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
-            ),
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 }

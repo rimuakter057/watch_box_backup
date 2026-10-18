@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import '../core/db/db_helper.dart';
+import '../core/prefs/pref_manager.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_endpoints.dart';
 import '../core/network/services/listings_api_service.dart';
@@ -9,7 +10,7 @@ import '../models/search_query_model.dart';
 import 'auth_controller.dart';
 
 class BookmarkController extends GetxController {
-  final DbHelper _dbHelper = DbHelper();
+  final PrefManager _pref = Get.find<PrefManager>();
   final AuthController _auth = Get.find<AuthController>();
 
   ListingsApiService get _listingsApi {
@@ -35,7 +36,6 @@ class BookmarkController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Fetch bookmarks once user session is ready
     ever(_auth.currentUser, (user) {
       if (user != null) {
         fetchBookmarks();
@@ -46,7 +46,6 @@ class BookmarkController extends GetxController {
       }
     });
     
-    // Initial fetch if user already loaded
     if (_auth.currentUser.value != null) {
       fetchBookmarks();
       fetchSavedSearches();
@@ -55,36 +54,23 @@ class BookmarkController extends GetxController {
 
   // 1. Fetch saved listings
   Future<void> fetchBookmarks() async {
-    final user = _auth.currentUser.value;
-    if (user == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot fetch saved products: User not authorized (no access token). No fallback.");
+      bookmarkedWatches.clear();
+      return;
+    }
 
     isLoading.value = true;
     try {
-      // 1. Live API fetch (POST/GET /api/v1/posts/saved-posts or /me/saved-listings)
       final liveSaved = await _listingsApi.getSavedPosts();
-      if (liveSaved != null && liveSaved.isNotEmpty) {
+      if (liveSaved != null) {
         bookmarkedWatches.assignAll(liveSaved);
-        isLoading.value = false;
-        return;
+        debugPrint("✅ [BOOKMARKS CONTROLLER] Loaded ${liveSaved.length} bookmarked watches from backend API.");
+      } else {
+        debugPrint("❌ [BOOKMARKS ERROR] Failed to fetch saved products from backend / not authorized. No fallback.");
       }
     } catch (e) {
-      print("Live bookmarks sync failed: $e");
-    }
-
-    try {
-      if (user.id != null) {
-        final db = await _dbHelper.database;
-        final List<Map<String, dynamic>> maps = await db.rawQuery('''
-          SELECT l.* FROM listings l
-          INNER JOIN bookmarks b ON l.id = b.listing_id
-          WHERE b.user_id = ?
-        ''', [user.id]);
-        
-        final list = maps.map((m) => WatchModel.fromMap(m)).toList();
-        bookmarkedWatches.assignAll(list);
-      }
-    } catch (e) {
-      print("Error fetching bookmarks: $e");
+      debugPrint("❌ [BOOKMARKS ERROR] Live bookmarks error: $e. No fallback.");
     } finally {
       isLoading.value = false;
     }
@@ -92,196 +78,133 @@ class BookmarkController extends GetxController {
 
   // Toggle Bookmark
   Future<void> toggleBookmark(WatchModel watch) async {
-    final user = _auth.currentUser.value;
-    if (user == null || watch.id == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot toggle bookmark: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to save items.");
+      return;
+    }
+
+    final targetId = watch.idString;
+    if (targetId.isEmpty) return;
 
     try {
-      // 1. Live API toggle
-      try {
-        await _listingsApi.toggleSave(watch.id.toString());
-      } catch (e) {
-        print("Backend toggle save failed: $e");
+      final success = await _listingsApi.toggleSave(targetId, watch: watch);
+      if (!success) {
+        debugPrint("❌ [BOOKMARKS ERROR] Backend toggle save rejected / not authorized for ${watch.title}. No fallback.");
+        Get.snackbar("Error", "Could not update bookmark on server.");
+        return;
       }
 
-      // 2. Local state update
-      final isSaved = isBookmarked(watch.id!);
+      final isSaved = isBookmarked(targetId);
       if (isSaved) {
-        bookmarkedWatches.removeWhere((w) => w.id == watch.id);
-        if (user.id != null) {
-          final db = await _dbHelper.database;
-          await db.delete(
-            'bookmarks',
-            where: 'user_id = ? AND listing_id = ?',
-            whereArgs: [user.id, watch.id],
-          );
-        }
+        bookmarkedWatches.removeWhere((w) => w.idString == targetId || (w.id != null && w.id.toString() == targetId));
         Get.snackbar("Bookmark Removed", "Removed ${watch.title} from bookmarks.");
       } else {
         bookmarkedWatches.add(watch);
-        if (user.id != null) {
-          final db = await _dbHelper.database;
-          await db.insert('bookmarks', {
-            'user_id': user.id,
-            'listing_id': watch.id,
-          });
-        }
         Get.snackbar("Bookmark Saved", "Saved ${watch.title} to bookmarks.");
       }
+      debugPrint("✅ [BOOKMARKS CONTROLLER] Bookmark toggled successfully on backend for watch #$targetId");
     } catch (e) {
-      print("Error toggling bookmark: $e");
+      debugPrint("❌ [BOOKMARKS ERROR] Error toggling bookmark: $e. No fallback.");
     }
   }
 
-  bool isBookmarked(int listingId) {
-    return bookmarkedWatches.any((w) => w.id == listingId);
+  bool isBookmarked(dynamic listingId) {
+    if (listingId == null) return false;
+    final str = listingId.toString();
+    if (str.isEmpty) return false;
+    return bookmarkedWatches.any((w) => w.idString == str || (w.id != null && w.id.toString() == str));
   }
 
   // 2. Fetch saved searches
   Future<void> fetchSavedSearches() async {
-    final user = _auth.currentUser.value;
-    if (user == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot fetch saved searches: User not authorized (no access token). No fallback.");
+      savedSearches.clear();
+      return;
+    }
 
     try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'saved_searches',
-        where: 'user_id = ?',
-        whereArgs: [user.id],
-      );
-      
-      final bool hasMockup = maps.any((m) => m['query_text'].toString().contains("Rolex Submariner 2020"));
-      if (!hasMockup) {
-        // Seed the 3 mock searches from the screenshot for a premium first-time experience!
-        final mockSearches = [
-          {
-            'user_id': user.id,
-            'query_text': 'Rolex Submariner 2020',
-            'filters_json': jsonEncode({
-              'platforms': ['EBAY', 'CHRONO24', 'GRAILZEE'],
-              'chips': ['Year: 2020+', '\$8k - \$14k', 'Excellent', 'EU/US'],
-              'alertStatus': 'Price Drop Alerts Enabled',
-              'matchesCount': 148,
-              'timeAgo': '2 hours ago',
-              'alertsEnabled': true,
-              'alertType': 'price_drop'
-            }),
-          },
-          {
-            'user_id': user.id,
-            'query_text': 'Omega Speedmaster Pro',
-            'filters_json': jsonEncode({
-              'platforms': ['CHRONO24', 'BOB\'S WATCHES'],
-              'chips': ['Sapphire', 'Under \$6,500', 'Mint'],
-              'alertStatus': 'New Listings Alerts Enabled',
-              'matchesCount': 42,
-              'timeAgo': '15 mins ago',
-              'alertsEnabled': true,
-              'alertType': 'new_listings'
-            }),
-          },
-          {
-            'user_id': user.id,
-            'query_text': 'Patek Philippe Calatrava',
-            'filters_json': jsonEncode({
-              'platforms': ['SOTHEBY\'S', 'CHRONO24'],
-              'chips': ['Yellow Gold', 'Vintage'],
-              'alertStatus': 'Push Notifications Off',
-              'matchesCount': 12,
-              'timeAgo': '1 day ago',
-              'alertsEnabled': false,
-              'alertType': 'none'
-            }),
-          }
-        ];
-        
-        for (var s in mockSearches) {
-          await db.insert('saved_searches', s);
+      final res = await _api.safeGet(ApiEndpoints.savedSearches);
+      if (res.isOk && res.body != null) {
+        final list = ApiClient.extractList(res.body);
+        if (list != null) {
+          final items = list.whereType<Map>().map((m) {
+            final id = m['id'] is int ? m['id'] as int : int.tryParse(m['id']?.toString() ?? '0') ?? 0;
+            final queryText = (m['query'] ?? m['query_text'] ?? '').toString();
+            final filters = m['filters'] is Map ? jsonEncode(m['filters']) : (m['filters_json']?.toString() ?? '{}');
+            return SearchQueryModel(
+              id: id,
+              userId: _pref.activeUserId ?? 1,
+              queryText: queryText,
+              filtersJson: filters,
+            );
+          }).toList();
+          savedSearches.assignAll(items);
+          debugPrint("✅ [BOOKMARKS CONTROLLER] Loaded ${items.length} saved searches from backend API.");
+          return;
         }
-        
-        // Re-query
-        final List<Map<String, dynamic>> refMaps = await db.query(
-          'saved_searches',
-          where: 'user_id = ?',
-          whereArgs: [user.id],
-        );
-        final list = refMaps.map((m) => SearchQueryModel.fromMap(m)).toList();
-        savedSearches.assignAll(list);
-      } else {
-        final list = maps.map((m) => SearchQueryModel.fromMap(m)).toList();
-        savedSearches.assignAll(list);
       }
+      debugPrint("❌ [BOOKMARKS ERROR] Failed to fetch saved searches from backend / not authorized. No fallback.");
     } catch (e) {
-      print("Error fetching saved searches: $e");
+      debugPrint("❌ [BOOKMARKS ERROR] Error fetching saved searches: $e. No fallback.");
     }
   }
 
   // Save Search Parameters
   Future<void> saveSearch(String query, Map<String, dynamic> filters) async {
-    final user = _auth.currentUser.value;
-    if (user == null || user.id == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot save search: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to save searches.");
+      return;
+    }
 
     try {
-      try {
-        await _api.safePost(ApiEndpoints.savedSearches, {
-          'query': query,
-          'filters': filters,
-        });
-      } catch (e) {
-        print("API saved-searches post failed: $e");
-      }
-
-      final db = await _dbHelper.database;
-      final filtersJsonStr = jsonEncode(filters);
-
-      // Check duplicates
-      final List<Map<String, dynamic>> maps = await db.query(
-        'saved_searches',
-        where: 'user_id = ? AND query_text = ? AND filters_json = ?',
-        whereArgs: [user.id, query, filtersJsonStr],
-      );
-
-      if (maps.isNotEmpty) {
-        Get.snackbar("Search Already Saved", "This search query with filters is already saved.");
-        return;
-      }
-
-      final id = await db.insert('saved_searches', {
-        'user_id': user.id,
-        'query_text': query,
-        'filters_json': filtersJsonStr,
+      final res = await _api.safePost(ApiEndpoints.savedSearches, {
+        'query': query,
+        'filters': filters,
       });
 
-      savedSearches.add(SearchQueryModel(
-        id: id,
-        userId: user.id!,
-        queryText: query,
-        filtersJson: filtersJsonStr,
-      ));
-      Get.snackbar("Search Saved", "Your search query and filters have been bookmarked.");
+      if (res.isOk) {
+        final body = res.body is Map ? res.body : {};
+        final data = body['data'] is Map ? body['data'] : body;
+        final newId = data['id'] is int ? data['id'] as int : int.tryParse(data['id']?.toString() ?? '0') ?? DateTime.now().millisecondsSinceEpoch;
+        
+        savedSearches.add(SearchQueryModel(
+          id: newId,
+          userId: _pref.activeUserId ?? 1,
+          queryText: query,
+          filtersJson: jsonEncode(filters),
+        ));
+        debugPrint("✅ [BOOKMARKS CONTROLLER] Saved search created on backend with ID: $newId");
+        Get.snackbar("Search Saved", "Your search query and filters have been saved.");
+      } else {
+        debugPrint("❌ [BOOKMARKS ERROR] Backend rejected saveSearch / not authorized. No fallback.");
+        Get.snackbar("Error", "Could not save search on server.");
+      }
     } catch (e) {
-      print("Error saving search: $e");
+      debugPrint("❌ [BOOKMARKS ERROR] Error saving search: $e. No fallback.");
     }
   }
 
   // Remove Saved Search
   Future<void> removeSavedSearch(int savedSearchId) async {
-    try {
-      try {
-        await _api.safeDelete('${ApiEndpoints.savedSearches}/$savedSearchId');
-      } catch (e) {
-        print("API saved-searches delete failed: $e");
-      }
+    if (!_pref.hasToken) {
+      debugPrint("❌ [BOOKMARKS ERROR] Cannot remove saved search: User not authorized (no access token). No fallback.");
+      return;
+    }
 
-      final db = await _dbHelper.database;
-      await db.delete(
-        'saved_searches',
-        where: 'id = ?',
-        whereArgs: [savedSearchId],
-      );
-      savedSearches.removeWhere((s) => s.id == savedSearchId);
-      Get.snackbar("Search Removed", "Removed saved search.");
+    try {
+      final res = await _api.safeDelete('${ApiEndpoints.savedSearches}/$savedSearchId');
+      if (res.isOk) {
+        savedSearches.removeWhere((s) => s.id == savedSearchId);
+        debugPrint("✅ [BOOKMARKS CONTROLLER] Saved search $savedSearchId deleted on backend.");
+        Get.snackbar("Search Removed", "Removed saved search.");
+      } else {
+        debugPrint("❌ [BOOKMARKS ERROR] Backend rejected delete saved search $savedSearchId. No fallback.");
+      }
     } catch (e) {
-      print("Error deleting saved search: $e");
+      debugPrint("❌ [BOOKMARKS ERROR] Error deleting saved search: $e. No fallback.");
     }
   }
 }

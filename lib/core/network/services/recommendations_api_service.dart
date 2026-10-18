@@ -26,10 +26,16 @@ class RecommendationsApiService {
   }
 
   Future<Map<String, dynamic>?> getMarketInsights() async {
-    final res = await _api.safeGet(ApiEndpoints.analyticsMarketInsights);
+    var res = await _api.safeGet(ApiEndpoints.analyticsMarketInsights);
+    if (!res.isOk || res.body == null || (res.body is Map && (res.body['data'] == null || (res.body['data'] is List && (res.body['data'] as List).isEmpty)))) {
+      res = await _api.safeGet('/marketplaces/ebay/market-insights');
+    }
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body : {};
-      return body['data'] is Map<String, dynamic> ? body['data'] : null;
+      final data = body['data'];
+      if (data is Map<String, dynamic>) return data;
+      if (data is List && data.isNotEmpty && data.first is Map) return Map<String, dynamic>.from(data.first);
+      if (body is Map<String, dynamic> && (body.containsKey('marketAveragePrice') || body.containsKey('items'))) return body;
     }
     return null;
   }

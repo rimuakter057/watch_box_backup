@@ -1,10 +1,11 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/watch_model.dart';
 import '../home/watch_detail_screen.dart';
-import '../../core/db/db_helper.dart';
 import '../../core/network/services/visual_search_api_service.dart';
 import '../../core/network/services/search_api_service.dart';
 
@@ -17,7 +18,6 @@ class ImageSearchScreen extends StatefulWidget {
 
 class _ImageSearchScreenState extends State<ImageSearchScreen>
     with TickerProviderStateMixin {
-  final DbHelper _dbHelper = DbHelper();
   VisualSearchApiService get _visualApi => Get.find<VisualSearchApiService>();
   SearchApiService get _searchApi => Get.find<SearchApiService>();
 
@@ -26,20 +26,18 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
   
   bool _isScanning = false;
   String _scanningMessage = "";
-  
-  // Local list of recent scans matching the mockup design
-  final List<Map<String, String>> _recentScans = [
-    {"name": "Submariner", "image": "assets/images/rolex_watch.png", "keyword": "Rolex"},
-    {"name": "Speedmaster", "image": "assets/images/4.jpg", "keyword": "Omega"},
-    {"name": "Nautilus", "image": "assets/images/5.png", "keyword": "Patek Philippe"},
-    {"name": "GMT", "image": "assets/images/1.png", "keyword": "GMT-Master"},
-  ].obs;
 
-  // Identified matches matching the layout and watches in the mockup
+  final ImagePicker _picker = ImagePicker();
+  Uint8List? _uploadedImageBytes;
+  String? _uploadedImageName;
+  String? _detectedTitle;
+
+  // List of recent scans loaded dynamically from backend API
+  final RxList<Map<String, String>> _recentScans = <Map<String, String>>[].obs;
+
+  // Identified matches from visual AI scan
   final RxList<WatchModel> _identifiedMatches = <WatchModel>[].obs;
   
-  // Custom mock percentages to overlay on cards
-  final List<int> _mockPercentages = [98, 92, 87, 84, 79, 72];
 
   @override
   void initState() {
@@ -55,7 +53,7 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
       CurvedAnimation(parent: _scannerAnimController, curve: Curves.easeInOut),
     );
 
-    // Initial search to pre-populate identified matches like in the mockup
+    // Load user's real recent visual scans from backend API
     _loadInitialMatches();
   }
 
@@ -67,110 +65,136 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
 
   Future<void> _loadInitialMatches() async {
     try {
-      final liveResults = await _searchApi.search(query: "Submariner");
-      if (liveResults != null && liveResults.isNotEmpty) {
-        _identifiedMatches.assignAll(liveResults);
-        return;
+      final recents = await _visualApi.getRecentImageSearches();
+      if (recents.isNotEmpty) {
+        _recentScans.assignAll(recents);
       }
-    } catch (_) {}
-
-    try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> results = await db.rawQuery(
-        "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ?",
-        ["%Submariner%", "%Rolex%"],
-      );
-      _identifiedMatches.assignAll(
-        results.map((m) => WatchModel.fromMap(m)).toList()
-      );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("❌ [IMAGE SEARCH] Error loading recent scans: $e. No fallback.");
+    }
   }
 
-  // Triggered when gallery or camera is selected
-  Future<void> _simulateImageAnalysis(String keyword, String label) async {
+  // Triggered when gallery or camera photo is captured
+  Future<void> _pickAndAnalyze(ImageSource source) async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+
+      setState(() {
+        _uploadedImageBytes = bytes;
+        _uploadedImageName = file.name;
+        _isScanning = true;
+        _scanningMessage = "Uploading image to WatchBox AI...";
+      });
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      setState(() {
+        _scanningMessage = "Analyzing visual landmarks & horology markers...";
+      });
+
+      final result = await _visualApi.executeVisualSearch(bytes, file.name);
+
+      if (!mounted) return;
+
+      if (result.success && result.items.isNotEmpty) {
+        _identifiedMatches.assignAll(result.items);
+        _detectedTitle = result.generatedTitle ??
+            ('${result.probableBrand ?? ''} ${result.probableModel ?? ''}').trim();
+
+        final label = _detectedTitle != null && _detectedTitle!.isNotEmpty
+            ? _detectedTitle!
+            : "Timepiece";
+
+        // Insert into recent scans list
+        final exists = _recentScans.any((e) => e["name"] == label);
+        if (!exists) {
+          _recentScans.insert(0, {
+            "name": label,
+            "image": result.imageUrl ?? (result.items.first.imageUrl),
+            "keyword": result.query ?? label,
+          });
+        }
+
+        setState(() {
+          _isScanning = false;
+        });
+
+        Get.snackbar(
+          "Visual Scan Successful",
+          "Found ${result.items.length} matching models for '$label'.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: context.primaryNav.withValues(alpha: 0.95),
+          colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+        );
+      } else {
+        setState(() {
+          _isScanning = false;
+        });
+
+        final msg = result.errorMessage ?? "No matching timepiece models were detected in this image.";
+        Get.snackbar(
+          "Visual Scan Notice",
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.amber.shade800.withValues(alpha: 0.95),
+          colorText: Colors.white,
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+      });
+      debugPrint("❌ [IMAGE SEARCH ERROR] $e");
+      Get.snackbar(
+        "Scan Error",
+        "Failed to scan image: $e",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent.withValues(alpha: 0.95),
+        colorText: Colors.white,
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+      );
+    }
+  }
+
+  Future<void> _onRecentScanSelected(Map<String, String> item) async {
     setState(() {
       _isScanning = true;
-      _scanningMessage = "Analyzing visual features...";
+      _scanningMessage = "Loading listings for ${item['name']}...";
     });
 
-    // 1.1 Attempt live visual AI analysis
     try {
-      _visualApi.analyzeImage([1, 2, 3], "watch_query.jpg");
-    } catch (_) {}
-    // 1. First stage delay: scanning texture
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() {
-      _scanningMessage = "Matching horology landmarks...";
-    });
-
-    // 2. Second stage: live search with SQLite fallback
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-
-    bool liveSuccess = false;
-    try {
+      final keyword = item['keyword'] ?? item['name'] ?? '';
       final liveResults = await _searchApi.search(query: keyword);
       if (liveResults != null && liveResults.isNotEmpty) {
         _identifiedMatches.assignAll(liveResults);
-        liveSuccess = true;
+      } else {
+        debugPrint("⚠️ [IMAGE SEARCH] No listings found for recent scan '$keyword'.");
       }
-    } catch (_) {}
-
-    if (!liveSuccess) {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> results = await db.rawQuery(
-        "SELECT * FROM listings WHERE title LIKE ? OR brand LIKE ? OR model LIKE ?",
-        ["%$keyword%", "%$keyword%", "%$keyword%"],
-      );
-
-      _identifiedMatches.assignAll(
-        results.map((m) => WatchModel.fromMap(m)).toList()
-      );
-    }
-
-    // Add to recent scans if not already there
-    final exists = _recentScans.any((element) => element["name"] == label);
-    if (!exists) {
-      // Find representative image
-      String imageAsset = "assets/images/8.png";
-      if (_identifiedMatches.isNotEmpty) {
-        imageAsset = _identifiedMatches.first.imageUrl;
+    } catch (e) {
+      debugPrint("❌ [IMAGE SEARCH] Error loading recent scan: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
       }
-      _recentScans.insert(0, {
-        "name": label,
-        "image": imageAsset,
-        "keyword": keyword,
-      });
     }
-
-    setState(() {
-      _isScanning = false;
-    });
-
-    Get.snackbar(
-      "Visual Scan Successful",
-      "Found ${_identifiedMatches.length} matching models for '$label'.",
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: context.primaryNav.withValues(alpha: 0.95),
-      colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
-      margin: const EdgeInsets.all(16),
-      borderRadius: 12,
-    );
-  }
-
-  // Pick random watch to scan for simulation
-  void _startRandomScan() {
-    final List<Map<String, String>> pool = [
-      {"name": "Submariner", "keyword": "Submariner"},
-      {"name": "Speedmaster", "keyword": "Speedmaster"},
-      {"name": "Nautilus", "keyword": "Nautilus"},
-      {"name": "Royal Oak", "keyword": "Royal Oak"},
-      {"name": "Santos", "keyword": "Cartier"},
-      {"name": "GMT Pepsi", "keyword": "Pepsi"},
-    ];
-    final selected = pool[Random().nextInt(pool.length)];
-    _simulateImageAnalysis(selected["keyword"]!, selected["name"]!);
   }
 
   @override
@@ -233,7 +257,7 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
     );
   }
 
-  // Widget: Faint watch dial engraving behind upload option
+  // Widget: Upload Card showing dial engraving or uploaded photo preview
   Widget _buildUploadBox() {
     return Container(
       width: double.infinity,
@@ -252,68 +276,158 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Circular watermark representing watch dial coordinates
-            Opacity(
-              opacity: 0.04,
-              child: CustomPaint(
-                size: const Size(200, 200),
-                painter: _WatchDialWatermarkPainter(color: context.textPrimaryColor),
-              ),
-            ),
-            
-            // Upload Content
-            InkWell(
-              onTap: _startRandomScan,
-              borderRadius: BorderRadius.circular(24),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Plus overlay circle icon
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: context.isDarkTheme ? const Color(0xFF0F3156) : const Color(0xFFD3E2F4),
-                        shape: BoxShape.circle,
+        child: _uploadedImageBytes != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.memory(
+                    _uploadedImageBytes!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 250,
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.15),
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
                       ),
-                      child: Center(
-                        child: Icon(
-                          Icons.add_photo_alternate_rounded,
-                          color: context.primaryNav,
-                          size: 28,
+                    ),
+                  ),
+                  Opacity(
+                    opacity: 0.08,
+                    child: CustomPaint(
+                      size: const Size(200, 200),
+                      painter: _WatchDialWatermarkPainter(color: Colors.white),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_detectedTitle != null && _detectedTitle!.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: context.primaryNav.withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    _detectedTitle!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                              ],
+                              Text(
+                                _uploadedImageName ?? "Uploaded Timepiece",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        ElevatedButton.icon(
+                          onPressed: () => _pickAndAnalyze(ImageSource.gallery),
+                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          label: const Text("Change", style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.25),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Colors.white30),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: 0.04,
+                    child: CustomPaint(
+                      size: const Size(200, 200),
+                      painter: _WatchDialWatermarkPainter(color: context.textPrimaryColor),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _pickAndAnalyze(ImageSource.gallery),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: context.isDarkTheme ? const Color(0xFF0F3156) : const Color(0xFFD3E2F4),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.add_photo_alternate_rounded,
+                                color: context.primaryNav,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            "Upload from Gallery",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Select a clear photo of your timepiece from your library",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: context.textSecondaryColor,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      "Upload from Gallery",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Select a clear photo of your timepiece from your library",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.textSecondaryColor,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -333,7 +447,7 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
         ],
       ),
       child: ElevatedButton(
-        onPressed: _startRandomScan,
+        onPressed: () => _pickAndAnalyze(ImageSource.camera),
         style: ElevatedButton.styleFrom(
           backgroundColor: context.primaryNav,
           foregroundColor: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
@@ -405,10 +519,13 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
             itemCount: _recentScans.length,
             itemBuilder: (context, idx) {
               final item = _recentScans[idx];
+              final imgUrl = item["image"] ?? "assets/images/rolex_watch.png";
+              final isNetwork = imgUrl.startsWith('http');
+
               return Padding(
                 padding: const EdgeInsets.only(right: 18.0),
                 child: InkWell(
-                  onTap: () => _simulateImageAnalysis(item["keyword"]!, item["name"]!),
+                  onTap: () => _onRecentScanSelected(item),
                   borderRadius: BorderRadius.circular(16),
                   child: Column(
                     children: [
@@ -419,19 +536,35 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: context.borderColor),
-                          image: DecorationImage(
-                            image: AssetImage(item["image"]!),
-                            fit: BoxFit.cover,
-                          ),
                         ),
+                        clipBehavior: Clip.antiAlias,
+                        child: isNetwork
+                            ? Image.network(
+                                imgUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Image.asset(
+                                  "assets/images/rolex_watch.png",
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Image.asset(
+                                imgUrl,
+                                fit: BoxFit.cover,
+                              ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        item["name"]!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: context.textSecondaryColor,
+                      SizedBox(
+                        width: 72,
+                        child: Text(
+                          item["name"]!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: context.textSecondaryColor,
+                          ),
                         ),
                       ),
                     ],
@@ -505,9 +638,11 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
             itemBuilder: (context, idx) {
               final watch = _identifiedMatches[idx];
               
-              // Map mock percentage matching sequence
-              final percentage = _mockPercentages[idx % _mockPercentages.length];
-              final isHighMatch = percentage >= 90;
+              // Map percentage from backend matchScore if present
+              final int? percentage = watch.matchScore != null
+                  ? (watch.matchScore! * 100).clamp(1, 100).toInt()
+                  : null;
+              final isHighMatch = (percentage ?? 0) >= 85;
 
               return Card(
                 color: context.cardBg,
@@ -527,10 +662,19 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.asset(
-                              watch.imageUrl,
-                              fit: BoxFit.cover,
-                            ),
+                            watch.imageUrl.startsWith('http')
+                                ? Image.network(
+                                    watch.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Image.asset(
+                                      'assets/images/8.png',
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : Image.asset(
+                                    watch.imageUrl,
+                                    fit: BoxFit.cover,
+                                  ),
                             // Gradient shadow on image for text visibility
                             Positioned.fill(
                               child: DecoratedBox(
@@ -547,27 +691,28 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
                               ),
                             ),
                             // Floating percentage badge in top-right
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isHighMatch 
-                                      ? context.primaryNav 
-                                      : context.textSecondaryColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  "$percentage% Match",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
+                            if (percentage != null)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isHighMatch 
+                                        ? context.primaryNav 
+                                        : context.textSecondaryColor,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "$percentage% Match",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -580,7 +725,9 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
                           children: [
                             // Source platform tag
                             Text(
-                              watch.platform == 'eBay' ? 'EBAY LUXURY' : watch.platform.toUpperCase(),
+                              watch.isEbay
+                                  ? 'EBAY MARKETPLACE'
+                                  : (watch.isInApp ? 'IN-APP LISTING' : watch.platform.toUpperCase()),
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,

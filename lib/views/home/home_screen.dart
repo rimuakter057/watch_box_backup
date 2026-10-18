@@ -3,12 +3,13 @@ import 'package:get/get.dart';
 import '../../core/theme/app_colors.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/search_tab.dart';
-import 'tabs/bookmarks_tab.dart';
 import 'tabs/alerts_tab.dart';
 import 'tabs/profile_tab.dart';
 import '../widgets/navbar/custom_navbar.dart';
 import 'traders_collections_screen.dart';
 import '../profile/my_listings_screen.dart';
+
+import 'tabs/listings_tab.dart';
 
 class MainContainerScreen extends StatefulWidget {
   const MainContainerScreen({super.key});
@@ -30,10 +31,6 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
     _tabs = [
       HomeTab(
         onTabChangeRequested: (index) {
-          if (index == 2) {
-            _showMarketplaceBottomSheet(context);
-            return;
-          }
           setState(() {
             _currentIndex = index;
           });
@@ -46,7 +43,7 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
           });
         },
       ),
-      const BookmarksTab(),
+      const ListingsTab(),
       const AlertsTab(),
       const ProfileTab(),
     ];
@@ -72,15 +69,6 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
     }
   }
 
-  void _showMarketplaceBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => const MarketplaceListingsBottomSheet(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,10 +85,6 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
       bottomNavigationBar: CustomNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
-          if (index == 2) {
-            _showMarketplaceBottomSheet(context);
-            return;
-          }
           setState(() {
             _currentIndex = index;
           });

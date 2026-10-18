@@ -108,14 +108,23 @@ class ChatController extends GetxController {
 
   // Fetch all chat rooms
   Future<void> loadChats() async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [CHAT ERROR] Cannot load chats: User not authorized (no access token). No fallback.");
+      chatRooms.clear();
+      return;
+    }
+
     isLoadingChats.value = true;
     try {
       final rooms = await _chatApi.getChats();
       if (rooms != null) {
         chatRooms.assignAll(rooms);
+        debugPrint("✅ [CHAT CONTROLLER] Loaded ${rooms.length} chat rooms from backend.");
+      } else {
+        debugPrint("❌ [CHAT ERROR] Chats API returned null / not authorized. No fallback.");
       }
     } catch (e) {
-      debugPrint("❌ [CHAT CONTROLLER] Error loading chats: $e");
+      debugPrint("❌ [CHAT CONTROLLER] Error loading chats: $e. No fallback.");
     } finally {
       isLoadingChats.value = false;
     }
@@ -123,6 +132,11 @@ class ChatController extends GetxController {
 
   // Open conversation room
   Future<void> openChat(String chatId, {String? recipientId, String? listingId, String? watchTitle}) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [CHAT ERROR] Cannot open chat $chatId: User not authorized (no access token). No fallback.");
+      return;
+    }
+
     activeChatId.value = chatId;
     messages.clear();
     isOtherTyping.value = false;
@@ -137,9 +151,12 @@ class ChatController extends GetxController {
       final history = await _chatApi.getMessages(chatId, currentUserId: currentUserId);
       if (history != null) {
         messages.assignAll(history);
+        debugPrint("✅ [CHAT CONTROLLER] Loaded ${history.length} messages for chat $chatId.");
+      } else {
+        debugPrint("❌ [CHAT ERROR] Messages API returned null / not authorized for $chatId. No fallback.");
       }
     } catch (e) {
-      debugPrint("❌ [CHAT CONTROLLER] Error fetching messages for $chatId: $e");
+      debugPrint("❌ [CHAT CONTROLLER] Error fetching messages for $chatId: $e. No fallback.");
     } finally {
       isLoadingMessages.value = false;
     }
@@ -147,6 +164,12 @@ class ChatController extends GetxController {
 
   // Contact seller from Watch Detail Screen
   Future<String?> startConversationWithSeller({required String recipientId, String? listingId, String? watchTitle}) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [CHAT ERROR] Cannot contact seller: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to contact sellers.");
+      return null;
+    }
+
     isLoadingChats.value = true;
     try {
       final chat = await _chatApi.createOrGetChat(
@@ -161,17 +184,24 @@ class ChatController extends GetxController {
         }
         await openChat(chat.id, recipientId: recipientId, listingId: listingId, watchTitle: watchTitle);
         return chat.id;
+      } else {
+        debugPrint("❌ [CHAT ERROR] Failed to create or get chat from backend / not authorized. No fallback.");
       }
     } catch (e) {
-      debugPrint("❌ [CHAT CONTROLLER] Error starting conversation: $e");
+      debugPrint("❌ [CHAT CONTROLLER] Error starting conversation: $e. No fallback.");
     } finally {
       isLoadingChats.value = false;
     }
     return null;
   }
 
-  // Send message with real-time Socket.io and HTTP fallback
+  // Send message
   Future<bool> sendMessage(String content, {String messageType = 'text', String? fileUrl}) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [CHAT ERROR] Cannot send message: User not authorized (no access token). No fallback.");
+      return false;
+    }
+
     final chatId = activeChatId.value;
     if (chatId.isEmpty || content.trim().isEmpty) return false;
 

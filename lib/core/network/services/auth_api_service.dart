@@ -218,6 +218,28 @@ class AuthApiService {
     return null;
   }
 
+  Future<String?> uploadAvatar(List<int> imageBytes, String filename) async {
+    debugPrint("📷 [PROFILE API] Uploading avatar image to server (${imageBytes.length} bytes)...");
+    final res = await _api.safeUpload(
+      ApiEndpoints.userAvatar,
+      imageBytes,
+      filename,
+      fieldName: 'image',
+    );
+    if (res.isOk && res.body != null) {
+      final resBody = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
+      final data = resBody['data'] is Map ? resBody['data'] as Map<String, dynamic> : resBody;
+      final avatarUrl = data['avatarUrl']?.toString();
+      if (avatarUrl != null && avatarUrl.isNotEmpty) {
+        await _pref.setActiveUserAvatarUrl(avatarUrl);
+        debugPrint("✅ [PROFILE API] Avatar updated successfully on server: $avatarUrl");
+        return avatarUrl;
+      }
+    }
+    debugPrint("⚠️ [PROFILE API] Avatar upload failed -> StatusCode: ${res.statusCode} | Text: ${res.statusText}");
+    return null;
+  }
+
   Future<bool> updateFcmToken(String fcmToken) async {
     debugPrint("🔔 [AUTH API] Syncing FCM token to backend...");
     var res = await _api.safePatch(ApiEndpoints.userUpdateFcmToken, {'fcmToken': fcmToken});

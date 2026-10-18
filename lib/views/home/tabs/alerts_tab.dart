@@ -21,87 +21,46 @@ class _AlertsTabState extends State<AlertsTab> {
     _alertController.fetchAlerts();
   }
 
-  // Parse alert into visual presentation matching the screenshot
+  // Parse alert into visual presentation from live backend data
   _AlertVisualData _getAlertData(AlertModel alert, BuildContext context) {
     final msg = alert.message;
     final isDark = context.isDarkTheme;
 
     // Date: YYYY-MM-DD
-    String dateStr = "2026-10-14";
+    String dateStr = "";
     try {
       final parsed = DateTime.tryParse(alert.timestamp);
       if (parsed != null) {
         dateStr =
             "${parsed.year.toString().padLeft(4, '0')}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}";
+      } else {
+        dateStr = DateTime.now().toIso8601String().split('T').first;
       }
-    } catch (_) {}
-
-    // Exact Daytona case (Screenshot match)
-    if (msg.contains("Daytona") || msg.contains("Rolex Daytona")) {
-      return _AlertVisualData(
-        title: "Rolex Daytona Price Drop\nAlert",
-        subtitle: "Price decreased by 4.5% on eBay listing",
-        date: dateStr,
-        icon: Icons.trending_down_rounded,
-        iconColor: const Color(0xFFEF4444),
-        iconBg: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF2F6),
-      );
+    } catch (_) {
+      dateStr = DateTime.now().toIso8601String().split('T').first;
     }
 
-    // Nautilus case
-    if (msg.contains("Nautilus") || msg.contains("Patek Philippe")) {
-      return _AlertVisualData(
-        title: "Patek Philippe Nautilus\nNew Listing Alert",
-        subtitle: "Newly listed for \$142,000 on eBay Luxury",
-        date: dateStr,
-        icon: Icons.storefront_rounded,
-        iconColor: const Color(0xFF07274C),
-        iconBg: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FE),
-      );
-    }
+    final bool isPriceDrop = alert.type == 'price_drop' || msg.toLowerCase().contains("drop");
+    final bool isNewListing = alert.type == 'new_listing' || msg.toLowerCase().contains("new listing") || msg.toLowerCase().contains("listed");
 
-    // Speedmaster case
-    if (msg.contains("Speedmaster") || msg.contains("Omega")) {
-      return _AlertVisualData(
-        title: "Omega Speedmaster\nPrice Drop Alert",
-        subtitle: "Price decreased by 8.1% on Watchfinder listing",
-        date: dateStr,
-        icon: Icons.trending_down_rounded,
-        iconColor: const Color(0xFFEF4444),
-        iconBg: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF2F6),
-      );
-    }
-
-    // Dynamic parsing for generic or simulated alerts
-    bool isPriceDrop = alert.type == 'price_drop' || msg.toLowerCase().contains("drop");
-    String title = "Watch Alert";
-    String subtitle = msg;
-
+    String title;
     if (isPriceDrop) {
-      final regExp = RegExp(r"dropped from \$(\d+) to \$(\d+)");
-      final match = regExp.firstMatch(msg);
-      String pctStr = "4.5%";
-      if (match != null) {
-        final o = double.tryParse(match.group(1) ?? "") ?? 0;
-        final n = double.tryParse(match.group(2) ?? "") ?? 0;
-        if (o > 0 && n > 0) {
-          final pct = (((o - n) / o) * 100).toStringAsFixed(1);
-          pctStr = "$pct%";
-        }
-      }
-
-      final titleReg = RegExp(r"Alert: (.*?) price dropped");
-      final tMatch = titleReg.firstMatch(msg);
-      final model = tMatch != null ? tMatch.group(1) : "Watch";
-      title = "$model Price Drop\nAlert";
-      subtitle = "Price decreased by $pctStr on Chrono24 listing";
+      title = "Price Drop Alert";
+    } else if (isNewListing) {
+      title = "New Listing Alert";
+    } else if (alert.type.isNotEmpty) {
+      title = "${alert.type.replaceAll('_', ' ').capitalizeFirst} Alert";
+    } else {
+      title = "Marketplace Alert";
     }
 
     return _AlertVisualData(
       title: title,
-      subtitle: subtitle,
+      subtitle: msg,
       date: dateStr,
-      icon: isPriceDrop ? Icons.trending_down_rounded : Icons.notifications_none_rounded,
+      icon: isPriceDrop
+          ? Icons.trending_down_rounded
+          : (isNewListing ? Icons.storefront_rounded : Icons.notifications_none_rounded),
       iconColor: isPriceDrop ? const Color(0xFFEF4444) : const Color(0xFF07274C),
       iconBg: isDark
           ? const Color(0xFF1E293B)

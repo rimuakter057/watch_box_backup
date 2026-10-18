@@ -4,9 +4,83 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/theme/app_colors.dart';
 import 'change_password_screen.dart';
+import 'package:image_picker/image_picker.dart';
 
 class AccountSettingsScreen extends StatelessWidget {
   const AccountSettingsScreen({super.key});
+
+  void _showPhotoPicker(BuildContext context) {
+    final auth = Get.find<AuthController>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
+        decoration: BoxDecoration(
+          color: context.surfaceBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40.w,
+              height: 4.h,
+              decoration: BoxDecoration(
+                color: context.borderColor,
+                borderRadius: BorderRadius.circular(2.r),
+              ),
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              "Change Profile Photo",
+              style: TextStyle(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.bold,
+                color: context.textPrimaryColor,
+              ),
+            ),
+            SizedBox(height: 16.h),
+            ListTile(
+              leading: Icon(Icons.photo_camera_rounded, color: context.primaryNav),
+              title: Text("Take Photo", style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimaryColor)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final picker = ImagePicker();
+                  final image = await picker.pickImage(source: ImageSource.camera, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+                  if (image != null) {
+                    final bytes = await image.readAsBytes();
+                    await auth.updateAvatar(bytes, image.name);
+                  }
+                } catch (e) {
+                  Get.snackbar("Error", "Could not pick image: $e");
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library_rounded, color: context.primaryNav),
+              title: Text("Choose from Gallery", style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimaryColor)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final picker = ImagePicker();
+                  final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+                  if (image != null) {
+                    final bytes = await image.readAsBytes();
+                    await auth.updateAvatar(bytes, image.name);
+                  }
+                } catch (e) {
+                  Get.snackbar("Error", "Could not pick image: $e");
+                }
+              },
+            ),
+            SizedBox(height: 8.h),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showEditProfileSheet(BuildContext context) {
     final auth = Get.find<AuthController>();
@@ -183,7 +257,7 @@ class AccountSettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showMockDialog(BuildContext context, String title) {
+  void _showInfoBottomSheet(BuildContext context, String title) {
     Get.bottomSheet(
       Container(
         decoration: BoxDecoration(
@@ -245,8 +319,8 @@ class AccountSettingsScreen extends StatelessWidget {
           // 1. Live Profile Summary Card
           Obx(() {
             final user = auth.currentUser.value;
-            final name = user?.name.isNotEmpty == true ? user!.name : "Alexander Thorne";
-            final email = user?.email.isNotEmpty == true ? user!.email : "customer@example.com";
+            final name = user?.name.isNotEmpty == true ? user!.name : (user != null ? "Collector" : "Not signed in");
+            final email = user?.email.isNotEmpty == true ? user!.email : "Not specified";
             final phone = user?.phone?.isNotEmpty == true ? user!.phone! : "Not specified";
             final country = user?.country?.isNotEmpty == true ? user!.country! : "Not specified";
 
@@ -284,7 +358,59 @@ class AccountSettingsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  SizedBox(height: 12.h),
+                  SizedBox(height: 14.h),
+                  Center(
+                    child: GestureDetector(
+                      onTap: () => _showPhotoPicker(context),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 76.w,
+                            height: 76.h,
+                            decoration: BoxDecoration(
+                              color: context.cardBg,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: context.primaryNav, width: 2),
+                            ),
+                            child: ClipOval(
+                              child: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
+                                  ? Image.network(
+                                      user.avatarUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => Center(
+                                        child: Text(
+                                          name.isNotEmpty ? name[0].toUpperCase() : "U",
+                                          style: TextStyle(fontSize: 26.sp, fontWeight: FontWeight.bold, color: context.primaryNav),
+                                        ),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : "U",
+                                        style: TextStyle(fontSize: 26.sp, fontWeight: FontWeight.bold, color: context.primaryNav),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: EdgeInsets.all(5.w),
+                              decoration: BoxDecoration(
+                                color: context.primaryNav,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 14.h),
                   _buildProfileRow(context, "Name", name),
                   SizedBox(height: 8.h),
                   _buildProfileRow(context, "Email", email),
@@ -329,7 +455,7 @@ class AccountSettingsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: context.textPrimaryColor),
                     ),
                     trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondaryColor),
-                    onTap: () => _showMockDialog(context, "Terms of Services"),
+                    onTap: () => _showInfoBottomSheet(context, "Terms of Services"),
                   ),
                   Divider(height: 1, indent: 16.w, endIndent: 16.w),
                   ListTile(
@@ -339,7 +465,7 @@ class AccountSettingsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: context.textPrimaryColor),
                     ),
                     trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondaryColor),
-                    onTap: () => _showMockDialog(context, "Privacy Policy"),
+                    onTap: () => _showInfoBottomSheet(context, "Privacy Policy"),
                   ),
                   Divider(height: 1, indent: 16.w, endIndent: 16.w),
                   ListTile(
@@ -349,7 +475,7 @@ class AccountSettingsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: context.textPrimaryColor),
                     ),
                     trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondaryColor),
-                    onTap: () => _showMockDialog(context, "About us"),
+                    onTap: () => _showInfoBottomSheet(context, "About us"),
                   ),
                 ],
               ),

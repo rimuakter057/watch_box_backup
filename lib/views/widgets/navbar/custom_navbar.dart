@@ -35,32 +35,41 @@ class CustomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          height: 66,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStandardNavItem(context, 0, Icons.home_rounded, Icons.home_outlined, "Home"),
-              _buildStandardNavItem(context, 1, Icons.search_rounded, Icons.search_rounded, "Search"),
-              _buildCenterListingItem(context, 2),
-              Obx(() {
-                int? badge;
-                if (Get.isRegistered<AlertController>()) {
-                  final c = Get.find<AlertController>().unreadCount.value;
-                  badge = c > 0 ? c : null;
-                } else {
-                  badge = 1;
-                }
-                return _buildStandardNavItem(
-                  context,
-                  3,
-                  Icons.notifications_rounded,
-                  Icons.notifications_none_rounded,
-                  "Alerts",
-                  badgeCount: badge,
-                );
-              }),
-              _buildStandardNavItem(context, 4, Icons.person_rounded, Icons.person_outline_rounded, "Profile"),
+              Expanded(
+                child: _buildStandardNavItem(context, 0, Icons.home_rounded, Icons.home_outlined, "Home"),
+              ),
+              Expanded(
+                child: _buildStandardNavItem(context, 1, Icons.search_rounded, Icons.search_rounded, "Search"),
+              ),
+              Expanded(
+                child: _buildCenterListingItem(context, 2),
+              ),
+              Expanded(
+                child: Obx(() {
+                  int? badge;
+                  if (Get.isRegistered<AlertController>()) {
+                    final c = Get.find<AlertController>().unreadCount.value;
+                    badge = c > 0 ? c : null;
+                  } else {
+                    badge = 1;
+                  }
+                  return _buildStandardNavItem(
+                    context,
+                    3,
+                    Icons.notifications_rounded,
+                    Icons.notifications_none_rounded,
+                    "Alerts",
+                    badgeCount: badge,
+                  );
+                }),
+              ),
+              Expanded(
+                child: _buildStandardNavItem(context, 4, Icons.person_rounded, Icons.person_outline_rounded, "Profile"),
+              ),
             ],
           ),
         ),
@@ -83,9 +92,10 @@ class CustomNavBar extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Stack(
               clipBehavior: Clip.none,
@@ -93,7 +103,7 @@ class CustomNavBar extends StatelessWidget {
                 Icon(
                   isSelected ? activeIcon : inactiveIcon,
                   color: isSelected ? const Color(0xFF07274C) : const Color(0xFF64748B),
-                  size: 24,
+                  size: 22,
                 ),
                 if (badgeCount != null && badgeCount > 0)
                   Positioned(
@@ -118,11 +128,13 @@ class CustomNavBar extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
                 color: isSelected ? const Color(0xFF07274C) : const Color(0xFF64748B),
               ),
@@ -140,18 +152,19 @@ class CustomNavBar extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: const Color(0xFF07274C),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF07274C).withValues(alpha: 0.35),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
@@ -159,15 +172,17 @@ class CustomNavBar extends StatelessWidget {
               child: Icon(
                 Icons.storefront_rounded,
                 color: Colors.white,
-                size: 24,
+                size: 20,
               ),
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           const Text(
             "Listings",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w600,
               color: Color(0xFF64748B),
             ),

@@ -220,10 +220,19 @@ class _TradersCollectionsScreenState extends State<TradersCollectionsScreen> {
                     padding: EdgeInsets.all(12.w),
                     child: Hero(
                       tag: 'watch-image-${watch.id}',
-                      child: Image.asset(
-                        watch.imageUrl,
-                        fit: BoxFit.contain,
-                      ),
+                      child: watch.imageUrl.startsWith('http')
+                          ? Image.network(
+                              watch.imageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => Image.asset(
+                                'assets/images/8.png',
+                                fit: BoxFit.contain,
+                              ),
+                            )
+                          : Image.asset(
+                              watch.imageUrl,
+                              fit: BoxFit.contain,
+                            ),
                     ),
                   ),
                   Positioned(

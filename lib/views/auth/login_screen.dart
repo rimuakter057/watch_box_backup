@@ -25,15 +25,14 @@ class _LoginScreenState extends State<LoginScreen> {
   AuthScreenState _currentState = AuthScreenState.signIn;
 
   // Controllers
-  final TextEditingController _nameController = TextEditingController(text: "Alexander Thorne");
-  final TextEditingController _emailController = TextEditingController(text: "a.thorne@chronodata.io");
-  final TextEditingController _passwordController = TextEditingController(text: "password123");
-  final TextEditingController _confirmPasswordController = TextEditingController(text: "password123");
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
 
-  // Test state parameters
-  final String _selectedRole = "user"; // 'user' or 'admin'
-  final String _selectedPlan = "paid"; // 'free' or 'paid'
+  final String _selectedRole = "user";
+  final String _selectedPlan = "free";
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -51,15 +50,23 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleSignIn() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final name = _nameController.text.trim().isEmpty ? "Alexander Thorne" : _nameController.text.trim();
 
-    debugPrint("📱 [LOGIN SCREEN] User submitted Sign In -> Name: '$name', Email: '$email'");
+    if (email.isEmpty || !email.contains('@')) {
+      Get.snackbar("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+    if (password.isEmpty) {
+      Get.snackbar("Missing Password", "Please enter your password.");
+      return;
+    }
+
+    debugPrint("📱 [LOGIN SCREEN] User submitted Sign In -> Email: '$email'");
     final success = await _authController.login(
-      name,
+      _nameController.text.trim(),
       _selectedRole,
       _selectedPlan,
-      email: email.isNotEmpty ? email : null,
-      password: password.isNotEmpty ? password : null,
+      email: email,
+      password: password,
     );
     if (success) {
       debugPrint("📱 [LOGIN SCREEN] Sign in successful. Navigating to /home");

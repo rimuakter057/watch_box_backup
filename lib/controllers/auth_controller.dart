@@ -30,67 +30,46 @@ class AuthController extends GetxController {
   }
 
   Future<void> _loadUserSession() async {
-    final activeId = _pref.activeUserId;
     final hasToken = _pref.hasToken;
-    debugPrint("🔄 [AUTH CONTROLLER] Loading session -> activeId: $activeId | hasToken: $hasToken");
-    if (hasToken || activeId != null) {
-      isLoading.value = true;
-      try {
-        // 1. First try live backend profile sync via stored JWT token
-        try {
-          debugPrint("📡 [AUTH CONTROLLER] Syncing live profile from backend for user session...");
-          final profileUser = await fetchProfile();
-          if (profileUser != null) {
-            debugPrint("✅ [AUTH CONTROLLER] Live profile session synced successfully: ${profileUser.name} (${profileUser.email})");
-            return;
-          }
-        } catch (e) {
-          debugPrint("⚠️ [AUTH CONTROLLER] Live profile sync failed, falling back to SQLite: $e");
-        }
+    debugPrint("🔄 [AUTH CONTROLLER] Checking authorization state -> hasToken: $hasToken");
 
-        // 2. Fallback to local SQLite session if activeId is present
-        if (activeId != null) {
-          final db = await _dbHelper.database;
-          final List<Map<String, dynamic>> maps = await db.query(
-            'users',
-            where: 'id = ?',
-            whereArgs: [activeId],
-          );
-          if (maps.isNotEmpty) {
-            final user = UserModel.fromMap(maps.first).copyWith(
-              email: _pref.activeUserEmail,
-              backendId: _pref.activeUserBackendId,
-              phone: _pref.activeUserPhone,
-              country: _pref.activeUserCountry,
-              avatarUrl: _pref.activeUserAvatarUrl,
-              currency: _pref.preferredCurrency,
-              darkMode: _pref.isDarkMode,
-            );
-            if (user.isActive) {
-              currentUser.value = user;
-              await _pref.setActiveUserRole(user.role);
-              await _pref.setActiveUserPlan(user.plan);
-              debugPrint("📦 [AUTH CONTROLLER] Loaded session from local SQLite: ${user.name} | Role: ${user.role} | Plan: ${user.plan}");
-            } else {
-              debugPrint("⚠️ [AUTH CONTROLLER] Inactive user in local DB -> Logging out.");
-              await logout();
-            }
-          } else {
-            debugPrint("⚠️ [AUTH CONTROLLER] User not found in local DB.");
-          }
-        }
-      } catch (e) {
-        debugPrint("❌ [AUTH CONTROLLER] Error loading user session: $e");
-      } finally {
-        isLoading.value = false;
-      }
-    } else {
-      debugPrint("ℹ️ [AUTH CONTROLLER] No active user session stored.");
+    if (!hasToken) {
+      debugPrint("❌ [AUTH ERROR] Not authorized: No access token found in preferences. Please sign in. No fallback.");
+      currentUser.value = null;
+      return;
     }
+
+    isLoading.value = true;
+    try {
+      debugPrint("📡 [AUTH CONTROLLER] Syncing live profile from backend for user session...");
+      final profileUser = await fetchProfile();
+      if (profileUser != null) {
+        debugPrint("✅ [AUTH CONTROLLER] Live profile session synced successfully: ${profileUser.name} (${profileUser.email})");
+      } else {
+        debugPrint("❌ [AUTH ERROR] Not authorized: Live profile sync failed. No fallback.");
+        currentUser.value = null;
+      }
+    } catch (e) {
+      debugPrint("❌ [AUTH ERROR] Exception during authorization check: $e. No fallback.");
+      currentUser.value = null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  void handleSessionExpired() {
+    debugPrint("🚨 [AUTH CONTROLLER] Session expired. Resetting currentUser and clearing session.");
+    currentUser.value = null;
+    _pref.clearSession();
   }
 
   // Fetch full live profile from GET /api/v1/users/me
   Future<UserModel?> fetchProfile() async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot fetch profile: User not authorized (no access token). No fallback.");
+      return null;
+    }
+
     debugPrint("👤 [AUTH CONTROLLER] Requesting profile fetch from backend API...");
     try {
       final profileData = await _authApi.getProfile();
@@ -113,8 +92,8 @@ class AuthController extends GetxController {
         final user = UserModel(
           id: existingUser?.id ?? _pref.activeUserId,
           backendId: backendId,
-          name: name.isNotEmpty ? name : "Alexander Thorne",
-          email: email.isNotEmpty ? email : "customer@example.com",
+          name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@').first : "User"),
+          email: email,
           role: role,
           plan: plan,
           status: 'active',
@@ -136,41 +115,57 @@ class AuthController extends GetxController {
 
         debugPrint("✅ [AUTH CONTROLLER] Profile successfully fetched and synced into state: ${user.name} <${user.email}> (Verified: $emailVerified, Currency: $currency, Dark: $darkMode)");
         return user;
+      } else {
+        debugPrint("❌ [AUTH ERROR] Profile fetch failed: Not authorized or profile data empty. No fallback.");
+        return null;
       }
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Exception fetching backend profile: $e");
+      debugPrint("❌ [AUTH ERROR] Exception fetching backend profile: $e. No fallback.");
+      return null;
     }
-    return currentUser.value;
   }
 
-  // Login: Syncs with live backend API (POST /api/v1/auth/login) with seamless local SQLite fallback
+  // Login: Syncs with live backend API (POST /api/v1/auth/login) strictly without fallback
   Future<bool> login(String name, String role, String plan, {String? email, String? password}) async {
-    if (name.trim().isEmpty) name = "Alexander Thorne";
-    final effectiveEmail = email ?? (name.toLowerCase().contains("alexander") ? "customer@example.com" : "${name.toLowerCase().replaceAll(' ', '')}@example.com");
-    final effectivePassword = password ?? "Password123!";
+    final effectiveEmail = (email ?? '').trim();
+    final effectivePassword = password ?? '';
 
-    debugPrint("🔐 [AUTH CONTROLLER] Starting login process for: $name ($effectiveEmail)");
+    if (effectiveEmail.isEmpty || effectivePassword.isEmpty) {
+      debugPrint("❌ [AUTH ERROR] Login failed: Email and password are required. No fallback.");
+      Get.snackbar("Missing Credentials", "Please enter both email and password.");
+      return false;
+    }
+
+    debugPrint("🔐 [AUTH CONTROLLER] Starting login process for: $effectiveEmail");
     isLoading.value = true;
     Map<String, dynamic>? backendData;
     
-    // 1. Attempt live backend authentication
+    // 1. Live backend authentication
     try {
       backendData = await _authApi.login(effectiveEmail, effectivePassword);
       if (backendData != null) {
         debugPrint("✅ [AUTH CONTROLLER] Live backend authentication succeeded for: $effectiveEmail");
+      } else {
+        debugPrint("❌ [AUTH ERROR] Login failed for $effectiveEmail: Backend returned null or unauthorized. No fallback.");
+        isLoading.value = false;
+        Get.snackbar("Authentication Failed", "Invalid email or password. Please try again.");
+        return false;
       }
     } catch (e) {
-      debugPrint("⚠️ [AUTH CONTROLLER] Backend auth offline or error: $e");
+      debugPrint("❌ [AUTH ERROR] Backend login error for $effectiveEmail: $e. No fallback.");
+      isLoading.value = false;
+      Get.snackbar("Authentication Error", "Could not sign in: $e");
+      return false;
     }
 
-    // 2. Persist to local database & session
+    // 2. Persist authenticated session
     try {
       final db = await _dbHelper.database;
-      final accountData = backendData != null && backendData['account'] is Map 
+      final accountData = backendData['account'] is Map 
           ? backendData['account'] as Map<String, dynamic> 
           : null;
       
-      final resolvedName = accountData?['displayName']?.toString() ?? name;
+      final resolvedName = accountData?['displayName']?.toString() ?? (name.trim().isNotEmpty ? name.trim() : effectiveEmail.split('@').first);
       final resolvedEmail = accountData?['email']?.toString() ?? effectiveEmail;
       final backendId = accountData?['id']?.toString() ?? _pref.activeUserBackendId;
       
@@ -243,6 +238,7 @@ class AuthController extends GetxController {
   }
 
   // Register: Syncs with live backend API (POST /api/v1/auth/register)
+  // Register: Syncs with live backend API (POST /api/v1/auth/register)
   Future<bool> register(String name, String email, String password, {String role = 'user', String plan = 'free'}) async {
     debugPrint("📝 [AUTH CONTROLLER] Starting registration for: $name ($email)");
     isLoading.value = true;
@@ -250,15 +246,23 @@ class AuthController extends GetxController {
       final res = await _authApi.register(name, email, password);
       if (res != null) {
         debugPrint("✅ [AUTH CONTROLLER] Live backend register succeeded for: $email");
+      } else {
+        debugPrint("❌ [AUTH ERROR] Registration failed on backend for $email. No fallback.");
+        isLoading.value = false;
+        Get.snackbar("Registration Failed", "Could not create account on server. Please try again.");
+        return false;
       }
     } catch (e) {
-      debugPrint("⚠️ [AUTH CONTROLLER] Backend register offline or error: $e");
+      debugPrint("❌ [AUTH ERROR] Backend register error: $e. No fallback.");
+      isLoading.value = false;
+      Get.snackbar("Registration Error", "Error registering account: $e");
+      return false;
     }
 
     return await login(name, role, plan, email: email, password: password);
   }
 
-  // Update Profile: calls PATCH /api/v1/users/update-profile or /users/me
+  // Update Profile: calls PATCH /api/v1/users/me
   Future<bool> updateProfile({
     String? displayName,
     String? phone,
@@ -268,6 +272,12 @@ class AuthController extends GetxController {
     List<int>? bannerImageBytes,
     String? bannerImageName,
   }) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot update profile: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to update profile.");
+      return false;
+    }
+
     debugPrint("✏️ [AUTH CONTROLLER] Triggering updateProfile: Name=$displayName, Phone=$phone, Country=$country, HasAvatar=${profileImageBytes != null}");
     isLoading.value = true;
     try {
@@ -281,10 +291,16 @@ class AuthController extends GetxController {
         bannerImageName: bannerImageName,
       );
 
+      if (resData == null) {
+        debugPrint("❌ [AUTH ERROR] Profile update rejected by backend / not authorized. No fallback.");
+        Get.snackbar("Error", "Could not update profile on server.");
+        return false;
+      }
+
       final existing = currentUser.value;
       if (existing != null) {
         final newName = displayName ?? existing.name;
-        final newAvatar = resData?['avatarUrl']?.toString() ?? existing.avatarUrl;
+        final newAvatar = resData['avatarUrl']?.toString() ?? existing.avatarUrl;
         final updatedUser = existing.copyWith(
           name: newName,
           phone: phone ?? existing.phone,
@@ -296,20 +312,48 @@ class AuthController extends GetxController {
         if (phone != null) await _pref.setActiveUserPhone(phone);
         if (country != null) await _pref.setActiveUserCountry(country);
         if (newAvatar != null) await _pref.setActiveUserAvatarUrl(newAvatar);
-
-        // Update local DB
-        if (existing.id != null) {
-          final db = await _dbHelper.database;
-          await db.update('users', {'name': newName}, where: 'id = ?', whereArgs: [existing.id]);
-        }
       }
       debugPrint("✅ [AUTH CONTROLLER] Profile updated successfully in state & preferences.");
       Get.snackbar("Success", "Profile updated successfully.");
       return true;
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Error updating profile: $e");
-      Get.snackbar("Notice", "Profile updated locally.");
-      return true;
+      debugPrint("❌ [AUTH ERROR] Error updating profile: $e. No fallback.");
+      Get.snackbar("Error", "Could not update profile: $e");
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> updateAvatar(List<int> imageBytes, String filename) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot update avatar: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to update profile picture.");
+      return false;
+    }
+
+    debugPrint("📷 [AUTH CONTROLLER] Uploading profile picture (${imageBytes.length} bytes)...");
+    isLoading.value = true;
+    try {
+      final avatarUrl = await _authApi.uploadAvatar(imageBytes, filename);
+      if (avatarUrl != null && avatarUrl.isNotEmpty) {
+        final existing = currentUser.value;
+        if (existing != null) {
+          currentUser.value = existing.copyWith(avatarUrl: avatarUrl);
+          await _pref.setActiveUserAvatarUrl(avatarUrl);
+        }
+        debugPrint("✅ [AUTH CONTROLLER] Profile picture updated successfully to: $avatarUrl");
+        Get.snackbar("Success", "Profile picture updated successfully!");
+        return true;
+      } else {
+        debugPrint("❌ [AUTH ERROR] Avatar upload rejected by backend. No fallback.");
+        Get.snackbar("Error", "Could not upload profile picture to server.");
+        return false;
+      }
+    } catch (e) {
+      debugPrint("❌ [AUTH ERROR] Error updating avatar: $e. No fallback.");
+      Get.snackbar("Error", "Could not update profile picture: $e");
+      return false;
     } finally {
       isLoading.value = false;
     }
@@ -324,11 +368,12 @@ class AuthController extends GetxController {
       if (success) {
         Get.snackbar("Verified", "OTP verified successfully.");
       } else {
+        debugPrint("❌ [AUTH ERROR] OTP verification failed on backend. No fallback.");
         Get.snackbar("Verification Failed", "Invalid or expired code.");
       }
       return success;
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] OTP verification error: $e");
+      debugPrint("❌ [AUTH ERROR] OTP verification error: $e. No fallback.");
       Get.snackbar("Error", "Could not verify code.");
       return false;
     } finally {
@@ -338,22 +383,35 @@ class AuthController extends GetxController {
 
   // FCM Token sync (PATCH /api/v1/users/update-fcm-token)
   Future<bool> updateFcmToken(String fcmToken) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot update FCM token: User not authorized (no access token). No fallback.");
+      return false;
+    }
     debugPrint("🔔 [AUTH CONTROLLER] Updating FCM token...");
     try {
       return await _authApi.updateFcmToken(fcmToken);
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Error updating FCM token: $e");
+      debugPrint("❌ [AUTH ERROR] Error updating FCM token: $e. No fallback.");
       return false;
     }
   }
 
   // Update Preferences: Currency and Dark Mode
   Future<void> updatePreferences({String? currency, bool? darkMode}) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot update preferences: User not authorized (no access token). No fallback.");
+      return;
+    }
     debugPrint("⚙️ [AUTH CONTROLLER] Updating preferences -> Currency=$currency, DarkMode=$darkMode");
     try {
-      await _authApi.updatePreferences(currency: currency, darkMode: darkMode);
+      final ok = await _authApi.updatePreferences(currency: currency, darkMode: darkMode);
+      if (!ok) {
+        debugPrint("❌ [AUTH ERROR] Backend preference update rejected / not authorized. No fallback.");
+        return;
+      }
     } catch (e) {
-      debugPrint("⚠️ [AUTH CONTROLLER] Backend preference update failed: $e");
+      debugPrint("❌ [AUTH ERROR] Backend preference update failed: $e. No fallback.");
+      return;
     }
 
     final existing = currentUser.value;
@@ -370,6 +428,12 @@ class AuthController extends GetxController {
 
   // Change Password: Calls live backend (POST /api/v1/auth/change-password)
   Future<bool> changePassword(String currentPassword, String newPassword) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot change password: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to change password.");
+      return false;
+    }
+
     debugPrint("🔒 [AUTH CONTROLLER] Initiating changePassword request...");
     try {
       final success = await _authApi.changePassword(currentPassword, newPassword);
@@ -377,12 +441,16 @@ class AuthController extends GetxController {
         debugPrint("✅ [AUTH CONTROLLER] Password changed successfully on backend.");
         Get.snackbar("Success", "Password updated successfully on server.");
         return true;
+      } else {
+        debugPrint("❌ [AUTH ERROR] Change password rejected by backend / not authorized. No fallback.");
+        Get.snackbar("Error", "Could not change password. Please check your current password.");
+        return false;
       }
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Change password backend error: $e");
+      debugPrint("❌ [AUTH ERROR] Change password backend error: $e. No fallback.");
+      Get.snackbar("Error", "Server error changing password: $e");
+      return false;
     }
-    Get.snackbar("Password Updated", "Your password has been changed.");
-    return true;
   }
 
   // Forgot Password: Calls live backend (POST /api/v1/auth/forgot-password)
@@ -390,11 +458,16 @@ class AuthController extends GetxController {
     debugPrint("📧 [AUTH CONTROLLER] Initiating forgotPassword request for: $email");
     try {
       final ok = await _authApi.forgotPassword(email);
-      debugPrint("✅ [AUTH CONTROLLER] Forgot password response: $ok");
-      return ok;
+      if (ok) {
+        debugPrint("✅ [AUTH CONTROLLER] Forgot password response: success");
+        return true;
+      } else {
+        debugPrint("❌ [AUTH ERROR] Forgot password rejected by backend. No fallback.");
+        return false;
+      }
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Forgot password exception: $e");
-      return true;
+      debugPrint("❌ [AUTH ERROR] Forgot password exception: $e. No fallback.");
+      return false;
     }
   }
 
@@ -413,10 +486,21 @@ class AuthController extends GetxController {
 
   // Delete Account: calls DELETE /api/v1/users/me
   Future<bool> deleteAccount() async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot delete account: User not authorized (no access token). No fallback.");
+      return false;
+    }
+
     debugPrint("🗑️ [AUTH CONTROLLER] Initiating account deletion...");
     isLoading.value = true;
     try {
       final success = await _authApi.deleteAccount();
+      if (!success) {
+        debugPrint("❌ [AUTH ERROR] Backend rejected account deletion / not authorized. No fallback.");
+        Get.snackbar("Error", "Could not delete account on server.");
+        return false;
+      }
+
       final user = currentUser.value;
       if (user?.id != null) {
         try {
@@ -429,9 +513,9 @@ class AuthController extends GetxController {
       debugPrint("✅ [AUTH CONTROLLER] Account deleted and local session cleared.");
       Get.offAllNamed('/login');
       Get.snackbar("Account Deleted", "Your account has been deleted permanently.");
-      return success;
+      return true;
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Error deleting account: $e");
+      debugPrint("❌ [AUTH ERROR] Error deleting account: $e. No fallback.");
       Get.snackbar("Error", "Could not delete account: $e");
       return false;
     } finally {
@@ -443,42 +527,29 @@ class AuthController extends GetxController {
   Future<void> upgradePlan() async {
     final user = currentUser.value;
     if (user == null || user.id == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot upgrade plan: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to upgrade plan.");
+      return;
+    }
     
     debugPrint("💳 [AUTH CONTROLLER] Upgrading plan to paid for user: ${user.name}");
     isLoading.value = true;
     try {
-      // 1. Sync with backend API
-      try {
-        await _subApi.changePlan('paid');
-        debugPrint("✅ [AUTH CONTROLLER] Subscriptions API updated to paid plan.");
-      } catch (e) {
-        debugPrint("⚠️ [AUTH CONTROLLER] Subscriptions API offline: $e");
+      final success = await _subApi.changePlan('paid');
+      if (!success) {
+        debugPrint("❌ [AUTH ERROR] Subscription upgrade failed on backend / not authorized. No fallback.");
+        Get.snackbar("Error", "Could not upgrade plan on server.");
+        return;
       }
+      debugPrint("✅ [AUTH CONTROLLER] Subscriptions API updated to paid plan.");
 
-      // 2. Local database update
-      final db = await _dbHelper.database;
-      await db.update(
-        'users',
-        {'plan': 'paid'},
-        where: 'id = ?',
-        whereArgs: [user.id],
-      );
-      
       final updatedUser = user.copyWith(plan: 'paid');
       currentUser.value = updatedUser;
       await _pref.setActiveUserPlan('paid');
-      
-      final nowStr = DateTime.now().toIso8601String().substring(0, 10);
-      await db.insert('payment_history', {
-        'user_id': user.id,
-        'amount': 29.99,
-        'date': nowStr,
-        'plan_name': 'paid',
-      });
-      
       Get.snackbar("Success", "Upgraded to Elite Plan successfully!");
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Upgrade error: $e");
+      debugPrint("❌ [AUTH ERROR] Upgrade error: $e. No fallback.");
       Get.snackbar("Error", "Could not upgrade plan: $e");
     } finally {
       isLoading.value = false;
@@ -489,32 +560,27 @@ class AuthController extends GetxController {
   Future<void> downgradePlan() async {
     final user = currentUser.value;
     if (user == null || user.id == null) return;
+    if (!_pref.hasToken) {
+      debugPrint("❌ [AUTH ERROR] Cannot downgrade plan: User not authorized (no access token). No fallback.");
+      return;
+    }
     
     debugPrint("💳 [AUTH CONTROLLER] Downgrading plan to free for user: ${user.name}");
     isLoading.value = true;
     try {
-      try {
-        await _subApi.changePlan('free');
-        debugPrint("✅ [AUTH CONTROLLER] Subscriptions API updated to free plan.");
-      } catch (e) {
-        debugPrint("⚠️ [AUTH CONTROLLER] Subscriptions API offline: $e");
+      final success = await _subApi.changePlan('free');
+      if (!success) {
+        debugPrint("❌ [AUTH ERROR] Subscription downgrade failed on backend / not authorized. No fallback.");
+        return;
       }
+      debugPrint("✅ [AUTH CONTROLLER] Subscriptions API updated to free plan.");
 
-      final db = await _dbHelper.database;
-      await db.update(
-        'users',
-        {'plan': 'free'},
-        where: 'id = ?',
-        whereArgs: [user.id],
-      );
-      
       final updatedUser = user.copyWith(plan: 'free');
       currentUser.value = updatedUser;
       await _pref.setActiveUserPlan('free');
-      
       Get.snackbar("Success", "Switched to Standard Free tier.");
     } catch (e) {
-      debugPrint("❌ [AUTH CONTROLLER] Downgrade error: $e");
+      debugPrint("❌ [AUTH ERROR] Downgrade error: $e. No fallback.");
     } finally {
       isLoading.value = false;
     }

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../models/watch_model.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../controllers/auth_controller.dart';
 
 class InvoicePreviewScreen extends StatefulWidget {
   final WatchModel watch;
@@ -43,10 +44,13 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final buyerName = widget.invoiceData['buyer_name'] ?? 'John Doe';
-    final buyerEmail = widget.invoiceData['buyer_email'] ?? 'john@doe.com';
-    final invoiceNo = widget.invoiceData['invoice_no'] ?? 'INV-000000';
-    final date = widget.invoiceData['date'] ?? '2026-06-11';
+    final auth = Get.find<AuthController>();
+    final sellerName = widget.invoiceData['seller_name'] ?? widget.invoiceData['sellerName'] ?? auth.currentUser.value?.name ?? 'Dealer';
+    final sellerEmail = widget.invoiceData['seller_email'] ?? widget.invoiceData['sellerEmail'] ?? auth.currentUser.value?.email ?? '';
+    final buyerName = widget.invoiceData['buyer_name'] ?? widget.invoiceData['buyerName'] ?? 'Customer';
+    final buyerEmail = widget.invoiceData['buyer_email'] ?? widget.invoiceData['buyerEmail'] ?? '';
+    final invoiceNo = widget.invoiceData['invoice_no'] ?? widget.invoiceData['invoiceNo'] ?? 'INV-${widget.watch.id ?? DateTime.now().millisecondsSinceEpoch % 1000000}';
+    final date = widget.invoiceData['date'] ?? widget.invoiceData['createdAt'] ?? DateTime.now().toIso8601String().split('T').first;
     final price = widget.invoiceData['price'] ?? widget.watch.price;
 
     final formattedPrice = '\$${price.toStringAsFixed(0).replaceAllMapped(
@@ -190,12 +194,12 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                   ),
                                   SizedBox(height: 6.h),
                                   Text(
-                                    "Alexander Thorne",
+                                    sellerName,
                                     style: TextStyle(fontSize: 14.sp, color: context.textPrimaryColor, fontWeight: FontWeight.w900),
                                   ),
                                   SizedBox(height: 2.h),
                                   Text(
-                                    "alexander@thorne.com",
+                                    sellerEmail,
                                     style: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
                                   ),
                                 ],
@@ -254,7 +258,16 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                   borderRadius: BorderRadius.circular(12.r),
                                   border: Border.all(color: context.borderColor),
                                 ),
-                                child: Image.asset(widget.watch.imageUrl, fit: BoxFit.contain),
+                                child: widget.watch.imageUrl.startsWith('http')
+                                    ? Image.network(
+                                        widget.watch.imageUrl,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (context, error, stackTrace) => Image.asset(
+                                          'assets/images/8.png',
+                                          fit: BoxFit.contain,
+                                        ),
+                                      )
+                                    : Image.asset(widget.watch.imageUrl, fit: BoxFit.contain),
                               ),
                               SizedBox(width: 14.w),
                               Expanded(

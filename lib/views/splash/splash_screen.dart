@@ -50,9 +50,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final pref = Get.find<PrefManager>();
     if (!pref.hasCompletedOnboarding) {
       Get.offAllNamed('/onboarding');
-    } else if (pref.activeUserId != null) {
+    } else if (pref.hasToken) {
       Get.offAllNamed('/home');
     } else {
+      debugPrint("❌ [AUTH ERROR] Not authorized: No access token found. Navigating to /login. No fallback.");
       Get.offAllNamed('/login');
     }
   }

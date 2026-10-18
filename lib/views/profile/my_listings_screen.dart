@@ -5,6 +5,7 @@ import '../../../controllers/search_controller.dart';
 import '../../../models/watch_model.dart';
 import '../../../core/theme/app_colors.dart';
 import 'invoice_preview_screen.dart';
+import '../widgets/create_listing_sheet.dart';
 
 class MyListingsScreen extends StatefulWidget {
   const MyListingsScreen({super.key});
@@ -19,7 +20,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
 
   List<WatchModel> _activeListings = [];
   List<WatchModel> _soldListings = [];
-  Map<int, Map<String, dynamic>> _invoices = {}; // listingId -> invoiceMap
+  Map<String, Map<String, dynamic>> _invoices = {}; // listingIdString -> invoiceMap
   bool _isLoading = true;
 
   @override
@@ -44,12 +45,13 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
     final sold = await _searchCtrl.getUserListings(isSold: true);
 
     // Query invoices for sold listings
-    final Map<int, Map<String, dynamic>> invoiceMap = {};
+    final Map<String, Map<String, dynamic>> invoiceMap = {};
     for (var watch in sold) {
-      if (watch.id != null) {
-        final inv = await _searchCtrl.getInvoice(watch.id!);
+      final idStr = watch.idString;
+      if (idStr.isNotEmpty) {
+        final inv = await _searchCtrl.getInvoice(idStr);
         if (inv != null) {
-          invoiceMap[watch.id!] = inv;
+          invoiceMap[idStr] = inv;
         }
       }
     }
@@ -65,218 +67,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
   }
 
   void _showAddListingSheet() {
-    final formKey = GlobalKey<FormState>();
-    final brandCtrl = TextEditingController();
-    final modelCtrl = TextEditingController();
-    final titleCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final yearCtrl = TextEditingController();
-    final locationCtrl = TextEditingController();
-    String selectedCondition = 'Mint';
-
-    final conditions = ['New', 'Mint', 'Very Good', 'Good', 'Fair'];
-
-    Get.bottomSheet(
-      Container(
-        decoration: BoxDecoration(
-          color: context.surfaceBg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-        ),
-        padding: EdgeInsets.fromLTRB(24.w, 24.h, 24.w, MediaQuery.of(context).viewInsets.bottom + 24.h),
-        child: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "List a Watch",
-                      style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: context.primaryNav),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Get.back(),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12.h),
-
-                // Brand & Model side-by-side
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: brandCtrl,
-                        style: TextStyle(color: context.textPrimaryColor),
-                        decoration: InputDecoration(
-                          labelText: "Brand",
-                          hintText: "e.g., Rolex",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        validator: (value) => value == null || value.trim().isEmpty ? "Required" : null,
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: TextFormField(
-                        controller: modelCtrl,
-                        style: TextStyle(color: context.textPrimaryColor),
-                        decoration: InputDecoration(
-                          labelText: "Model",
-                          hintText: "e.g., Daytona",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        validator: (value) => value == null || value.trim().isEmpty ? "Required" : null,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12.h),
-
-                // Title
-                TextFormField(
-                  controller: titleCtrl,
-                  style: TextStyle(color: context.textPrimaryColor),
-                  decoration: InputDecoration(
-                    labelText: "Listing Title",
-                    hintText: "Rolex Daytona 116500LN Panda Dial",
-                    labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                  ),
-                  validator: (value) => value == null || value.trim().isEmpty ? "Required" : null,
-                ),
-                SizedBox(height: 12.h),
-
-                // Price & Year side-by-side
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: priceCtrl,
-                        style: TextStyle(color: context.textPrimaryColor),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: "Price (\$)",
-                          hintText: "e.g., 29500",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return "Required";
-                          if (double.tryParse(value) == null) return "Invalid price";
-                          return null;
-                        },
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: TextFormField(
-                        controller: yearCtrl,
-                        style: TextStyle(color: context.textPrimaryColor),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: "Year",
-                          hintText: "e.g., 2023",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return "Required";
-                          if (int.tryParse(value) == null) return "Invalid year";
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12.h),
-
-                // Condition & Location side-by-side
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedCondition,
-                        decoration: InputDecoration(
-                          labelText: "Condition",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        items: conditions.map((c) => DropdownMenuItem(value: c, child: Text(c, style: TextStyle(fontSize: 13.sp, color: context.textPrimaryColor)))).toList(),
-                        onChanged: (val) {
-                          if (val != null) selectedCondition = val;
-                        },
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: TextFormField(
-                        controller: locationCtrl,
-                        style: TextStyle(color: context.textPrimaryColor),
-                        decoration: InputDecoration(
-                          labelText: "Location",
-                          hintText: "e.g., USA",
-                          labelStyle: TextStyle(fontSize: 12.sp, color: context.textSecondaryColor),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-                        ),
-                        validator: (value) => value == null || value.trim().isEmpty ? "Required" : null,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 20.h),
-
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 48.h,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.primaryNav,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                      elevation: 0,
-                    ),
-                    onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        final success = await _searchCtrl.createCustomListing(
-                          brand: brandCtrl.text.trim(),
-                          model: modelCtrl.text.trim(),
-                          title: titleCtrl.text.trim(),
-                          price: double.parse(priceCtrl.text),
-                          year: int.parse(yearCtrl.text),
-                          condition: selectedCondition,
-                          location: locationCtrl.text.trim(),
-                        );
-                        if (success) {
-                          Get.back();
-                          _loadAllListings();
-                          Get.snackbar(
-                            "Success",
-                            "Your watch listing was posted successfully!",
-                            backgroundColor: context.primaryNav,
-                            colorText: Colors.white,
-                          );
-                        }
-                      }
-                    },
-                    child: Text("Post Listing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.sp)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      isScrollControlled: true,
-    );
+    CreateListingSheet.show(context, onListingCreated: _loadAllListings);
   }
 
   void _showGenerateInvoiceDialog(WatchModel watch) {
@@ -345,7 +136,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
             onPressed: () async {
               if (formKey.currentState!.validate()) {
                 final success = await _searchCtrl.generateInvoice(
-                  listingId: watch.id!,
+                  listingId: watch.idString,
                   buyerName: nameCtrl.text.trim(),
                   buyerEmail: emailCtrl.text.trim(),
                   price: watch.price,
@@ -355,7 +146,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
                   await _loadAllListings();
                   
                   // Instantly navigate to invoice preview
-                  final inv = _invoices[watch.id!];
+                  final inv = _invoices[watch.idString];
                   if (inv != null) {
                     Get.to(() => InvoicePreviewScreen(watch: watch, invoiceData: inv));
                   }
@@ -472,7 +263,16 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
                     color: context.chipBg,
                     borderRadius: BorderRadius.circular(10.r),
                   ),
-                  child: Image.asset(watch.imageUrl, fit: BoxFit.contain),
+                  child: watch.imageUrl.startsWith('http')
+                      ? Image.network(
+                          watch.imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Image.asset(
+                            'assets/images/8.png',
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      : Image.asset(watch.imageUrl, fit: BoxFit.contain),
                 ),
                 SizedBox(width: 14.w),
                 // Title and Info
@@ -535,7 +335,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
       itemCount: _soldListings.length,
       itemBuilder: (context, index) {
         final watch = _soldListings[index];
-        final invoice = _invoices[watch.id!];
+        final invoice = _invoices[watch.idString];
         final hasInvoice = invoice != null;
 
         final formattedPrice = '\$${watch.price.toStringAsFixed(0).replaceAllMapped(
@@ -566,7 +366,16 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
                         color: context.chipBg,
                         borderRadius: BorderRadius.circular(10.r),
                       ),
-                      child: Image.asset(watch.imageUrl, fit: BoxFit.contain),
+                      child: watch.imageUrl.startsWith('http')
+                          ? Image.network(
+                              watch.imageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => Image.asset(
+                                'assets/images/8.png',
+                                fit: BoxFit.contain,
+                              ),
+                            )
+                          : Image.asset(watch.imageUrl, fit: BoxFit.contain),
                     ),
                     SizedBox(width: 14.w),
                     // Title and Info

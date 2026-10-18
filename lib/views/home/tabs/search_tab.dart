@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../controllers/search_controller.dart';
 import '../../../controllers/bookmark_controller.dart';
 import '../../../core/theme/app_colors.dart';
@@ -54,7 +55,7 @@ class _SearchTabState extends State<SearchTab> {
     );
   }
 
-  void _showImageSearchMockDialog() {
+  void _openImageSearchScreen() {
     Get.to(() => const ImageSearchScreen());
   }
 
@@ -148,7 +149,7 @@ class _SearchTabState extends State<SearchTab> {
                           color: Color(0xFF07274C),
                           size: 22,
                         ),
-                        onPressed: _showImageSearchMockDialog,
+                        onPressed: _openImageSearchScreen,
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -567,34 +568,89 @@ class _SearchTabState extends State<SearchTab> {
                     height: 200,
                     width: double.infinity,
                     color: context.isDarkTheme ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                    child: Image.asset(watch.imageUrl, fit: BoxFit.contain),
+                    child: watch.imageUrl.startsWith('http')
+                        ? Image.network(
+                            watch.imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Image.asset(
+                              'assets/images/8.png',
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : Image.asset(watch.imageUrl, fit: BoxFit.contain),
                   ),
                 ),
                 Positioned(
                   bottom: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF07274C),
+                      color: watch.isEbay
+                          ? const Color(0xFF0064D2)
+                          : (watch.isInApp ? const Color(0xFFD97706) : const Color(0xFF07274C)),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      "TOP VERIFIED",
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          watch.isEbay
+                              ? Icons.shopping_bag_outlined
+                              : (watch.isInApp ? Icons.verified_rounded : Icons.public_rounded),
+                          size: 11,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          watch.isEbay
+                              ? "EBAY MARKETPLACE"
+                              : (watch.isInApp ? "IN-APP LISTING" : watch.platform.toUpperCase()),
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                if (watch.isEbay)
+                  Positioned(
+                    top: 12,
+                    right: 56,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final url = watch.redirectUrl;
+                        if (url != null) {
+                          final uri = Uri.tryParse(url);
+                          if (uri != null && await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        }
+                      },
+                      child: Container(
+                        height: 36,
+                        width: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0064D2).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.open_in_new_rounded,
+                          color: Color(0xFF0064D2),
+                          size: 17,
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   top: 12,
                   right: 12,
                   child: Obx(() {
-                    final isSaved = _bookmark.isBookmarked(watch.id!);
+                    final isSaved = _bookmark.isBookmarked(watch.idString);
                     return GestureDetector(
                       onTap: () => _bookmark.toggleBookmark(watch),
                       child: Container(
@@ -708,7 +764,18 @@ class _SearchTabState extends State<SearchTab> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                     child: Container(
                       color: context.isDarkTheme ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                      child: Image.asset(watch.imageUrl, fit: BoxFit.contain, width: double.infinity),
+                      child: watch.imageUrl.startsWith('http')
+                          ? Image.network(
+                              watch.imageUrl,
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              errorBuilder: (context, error, stackTrace) => Image.asset(
+                                'assets/images/8.png',
+                                fit: BoxFit.contain,
+                                width: double.infinity,
+                              ),
+                            )
+                          : Image.asset(watch.imageUrl, fit: BoxFit.contain, width: double.infinity),
                     ),
                   ),
                 ),

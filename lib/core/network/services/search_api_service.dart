@@ -61,7 +61,7 @@ class SearchApiService {
         return list.map((e) => e.toString()).toList();
       }
     }
-    return ["Rolex Submariner", "Patek Philippe Nautilus", "Omega Speedmaster", "Audemars Piguet Royal Oak"];
+    return [];
   }
 
   Future<Map<String, dynamic>?> getSearchQuotaUsage() async {

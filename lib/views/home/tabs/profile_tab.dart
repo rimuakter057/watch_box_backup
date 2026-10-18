@@ -11,6 +11,7 @@ import '../../profile/change_password_screen.dart';
 import '../../profile/my_listings_screen.dart';
 import '../../profile/notifications_screen.dart';
 import '../../chat/chat_screen.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -56,6 +57,97 @@ class _ProfileTabState extends State<ProfileTab> {
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
       colorText: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
+    );
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+      final filename = image.name;
+
+      Get.showOverlay(
+        asyncFunction: () async {
+          await _auth.updateAvatar(bytes, filename);
+        },
+        loadingWidget: Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF07274C)),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("❌ [PROFILE TAB] Image pick error: $e");
+      Get.snackbar("Error", "Could not pick image: $e");
+    }
+  }
+
+  void _showProfilePhotoPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: BoxDecoration(
+          color: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Change Profile Photo",
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded, color: Color(0xFF07274C)),
+              title: const Text("Take Photo", style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadAvatar(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF07274C)),
+              title: const Text("Choose from Gallery", style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadAvatar(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
@@ -195,8 +287,8 @@ class _ProfileTabState extends State<ProfileTab> {
         child: Obx(() {
           final user = _auth.currentUser.value;
           final bool isPremium = user?.isPaid ?? false;
-          final String name = user?.name.isNotEmpty == true ? user!.name : "Alexander Thorne";
-          final String email = user?.email.isNotEmpty == true ? user!.email : "customer@example.com";
+          final String name = user?.name.isNotEmpty == true ? user!.name : (user != null ? "Collector" : "");
+          final String email = user?.email.isNotEmpty == true ? user!.email : "";
           final String role = (user?.role ?? "USER").toUpperCase();
           final String? avatarUrl = user?.avatarUrl;
           final String? country = user?.country;
@@ -214,31 +306,52 @@ class _ProfileTabState extends State<ProfileTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // 1. User Avatar & Info
+                  // 1. User Avatar & Info (Interactive Profile Picture Change)
                   Center(
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: 92,
-                          height: 92,
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF07274C),
-                              width: 2,
+                    child: GestureDetector(
+                      onTap: _showProfilePhotoPicker,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF07274C),
+                                width: 2.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.12),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                          ),
-                          child: ClipOval(
-                            child: avatarUrl != null && avatarUrl.isNotEmpty
-                                ? Image.network(
-                                    avatarUrl,
-                                    width: 92,
-                                    height: 92,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Center(
+                            child: ClipOval(
+                              child: avatarUrl != null && avatarUrl.isNotEmpty
+                                  ? Image.network(
+                                      avatarUrl,
+                                      width: 96,
+                                      height: 96,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Center(
+                                        child: Text(
+                                          name.isNotEmpty ? name[0].toUpperCase() : (user != null ? "C" : "U"),
+                                          style: TextStyle(
+                                            fontSize: 34,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.white : const Color(0xFF07274C),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : Center(
                                       child: Text(
-                                        name.isNotEmpty ? name[0].toUpperCase() : "A",
+                                        name.isNotEmpty ? name[0].toUpperCase() : (user != null ? "C" : "U"),
                                         style: TextStyle(
                                           fontSize: 34,
                                           fontWeight: FontWeight.bold,
@@ -246,33 +359,44 @@ class _ProfileTabState extends State<ProfileTab> {
                                         ),
                                       ),
                                     ),
-                                  )
-                                : Center(
-                                    child: Text(
-                                      name.isNotEmpty ? name[0].toUpperCase() : "A",
-                                      style: TextStyle(
-                                        fontSize: 34,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.white : const Color(0xFF07274C),
-                                      ),
-                                    ),
-                                  ),
+                            ),
                           ),
-                        ),
-                        if (emailVerified)
+                          // Camera edit button badge
                           Positioned(
                             bottom: 0,
                             right: 0,
                             child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF10B981),
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF07274C),
                                 shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.25),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(Icons.check, size: 14, color: Colors.white),
+                              child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                             ),
                           ),
-                      ],
+                          if (emailVerified)
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF10B981),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.check, size: 12, color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
