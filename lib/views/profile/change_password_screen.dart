@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/theme/app_colors.dart';
+import '../home/home_screen.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -54,7 +55,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         _isUpdating = false;
       });
       if (success) {
-        Get.back();
+        debugPrint("📱 [CHANGE PASSWORD UI] Password updated successfully. Redirecting to Profile screen...");
+        Get.offAll(() => const MainContainerScreen(initialIndex: 4));
       }
     }
   }

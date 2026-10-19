@@ -12,7 +12,8 @@ import '../profile/my_listings_screen.dart';
 import 'tabs/listings_tab.dart';
 
 class MainContainerScreen extends StatefulWidget {
-  const MainContainerScreen({super.key});
+  final int initialIndex;
+  const MainContainerScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainContainerScreen> createState() => _MainContainerScreenState();
@@ -28,6 +29,14 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
   @override
   void initState() {
     super.initState();
+    final args = Get.arguments;
+    if (args is Map && args['tabIndex'] is int) {
+      _currentIndex = args['tabIndex'] as int;
+    } else if (args is Map && args['initialIndex'] is int) {
+      _currentIndex = args['initialIndex'] as int;
+    } else {
+      _currentIndex = widget.initialIndex;
+    }
     _tabs = [
       HomeTab(
         onTabChangeRequested: (index) {

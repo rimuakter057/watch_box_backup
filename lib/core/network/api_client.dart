@@ -137,14 +137,24 @@ class ApiClient extends GetConnect {
     return false;
   }
 
-  void _handleSessionExpired() {
-    debugPrint("🚨 [AUTH ERROR] Session expired or invalid refresh token. Clearing local session...");
-    _pref.clearSession();
+  bool _isHandlingSessionExpired = false;
+
+  void _handleSessionExpired() async {
+    if (_isHandlingSessionExpired) return;
+    _isHandlingSessionExpired = true;
+
+    debugPrint("🚨 [AUTH ERROR] Session expired or invalid refresh token. Clearing local session and redirecting to /login...");
+    await _pref.clearSession();
     if (Get.isRegistered<AuthController>()) {
       Get.find<AuthController>().handleSessionExpired();
     }
+
+    Future.delayed(const Duration(seconds: 4), () {
+      _isHandlingSessionExpired = false;
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (Get.currentRoute != '/login' && Get.currentRoute != '/splash' && Get.currentRoute != '/onboarding') {
+      if (Get.currentRoute != '/login' && Get.currentRoute != '/onboarding') {
         Get.offAllNamed('/login');
         Get.snackbar(
           "Session Expired",
@@ -159,18 +169,35 @@ class ApiClient extends GetConnect {
     });
   }
 
+  Future<Response<T>> _handleResponse401<T>(Response<T> res, String url, Future<Response<T>> Function() retryRequest) async {
+    if (res.statusCode != 401) return res;
+
+    final path = Uri.tryParse(url)?.path ?? url;
+    final isAuthEndpoint = path.contains('/auth/login') ||
+        path.contains('/auth/register') ||
+        path.contains('/auth/refresh') ||
+        path.contains('/auth/forgot-password') ||
+        path.contains('/auth/reset-password');
+
+    if (isAuthEndpoint) return res;
+
+    if (_canAttemptRefresh(url)) {
+      final refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        debugPrint("🔄 [API RETRY] Retrying request: $url with new access token");
+        return await retryRequest();
+      }
+    }
+
+    _handleSessionExpired();
+    return res;
+  }
+
   Future<Response<T>> safeGet<T>(String url, {Map<String, dynamic>? query}) async {
     debugPrint("🌐 [API FETCH CALL] safeGet: $url ${query != null ? '| Query: $query' : ''}");
     try {
-      var res = await get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString())));
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safeGet: $url with new access token");
-          res = await get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString())));
-        }
-      }
-      return res;
+      final res = await get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      return await _handleResponse401(res, url, () => get<T>(url, query: query?.map((k, v) => MapEntry(k, v.toString()))));
     } catch (e) {
       debugPrint("❌ [API CLIENT GET ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -180,15 +207,8 @@ class ApiClient extends GetConnect {
   Future<Response<T>> safePost<T>(String url, dynamic body, {Map<String, dynamic>? query}) async {
     debugPrint("🌐 [API FETCH CALL] safePost: $url | Payload: $body ${query != null ? '| Query: $query' : ''}");
     try {
-      var res = await post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString())));
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safePost: $url with new access token");
-          res = await post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString())));
-        }
-      }
-      return res;
+      final res = await post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString())));
+      return await _handleResponse401(res, url, () => post<T>(url, body, query: query?.map((k, v) => MapEntry(k, v.toString()))));
     } catch (e) {
       debugPrint("❌ [API CLIENT POST ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -198,15 +218,8 @@ class ApiClient extends GetConnect {
   Future<Response<T>> safePatch<T>(String url, dynamic body) async {
     debugPrint("🌐 [API FETCH CALL] safePatch: $url | Payload: $body");
     try {
-      var res = await patch<T>(url, body);
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safePatch: $url with new access token");
-          res = await patch<T>(url, body);
-        }
-      }
-      return res;
+      final res = await patch<T>(url, body);
+      return await _handleResponse401(res, url, () => patch<T>(url, body));
     } catch (e) {
       debugPrint("❌ [API CLIENT PATCH ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -216,15 +229,8 @@ class ApiClient extends GetConnect {
   Future<Response<T>> safeDelete<T>(String url) async {
     debugPrint("🌐 [API FETCH CALL] safeDelete: $url");
     try {
-      var res = await delete<T>(url);
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safeDelete: $url with new access token");
-          res = await delete<T>(url);
-        }
-      }
-      return res;
+      final res = await delete<T>(url);
+      return await _handleResponse401(res, url, () => delete<T>(url));
     } catch (e) {
       debugPrint("❌ [API CLIENT DELETE ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -234,15 +240,8 @@ class ApiClient extends GetConnect {
   Future<Response<T>> safePut<T>(String url, dynamic body) async {
     debugPrint("🌐 [API FETCH CALL] safePut: $url | Payload: $body");
     try {
-      var res = await put<T>(url, body);
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safePut: $url with new access token");
-          res = await put<T>(url, body);
-        }
-      }
-      return res;
+      final res = await put<T>(url, body);
+      return await _handleResponse401(res, url, () => put<T>(url, body));
     } catch (e) {
       debugPrint("❌ [API CLIENT PUT ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -268,23 +267,13 @@ class ApiClient extends GetConnect {
         mimeType = 'image/gif';
       }
 
-      final form = FormData({
+      FormData createForm() => FormData({
         fieldName: MultipartFile(imageBytes, filename: filename, contentType: mimeType),
         ...?fields,
       });
-      var res = await post<T>(url, form);
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safeUpload: $url with new access token");
-          final retryForm = FormData({
-            fieldName: MultipartFile(imageBytes, filename: filename, contentType: mimeType),
-            ...?fields,
-          });
-          res = await post<T>(url, retryForm);
-        }
-      }
-      return res;
+
+      final res = await post<T>(url, createForm());
+      return await _handleResponse401(res, url, () => post<T>(url, createForm()));
     } catch (e) {
       debugPrint("❌ [API CLIENT UPLOAD ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");
@@ -294,23 +283,12 @@ class ApiClient extends GetConnect {
   Future<Response<T>> safeMultipartPatch<T>(String url, {Map<String, String>? fields, Map<String, MultipartFile>? files}) async {
     debugPrint("🌐 [API FETCH CALL] safeMultipartPatch: $url | Fields: ${fields?.keys} | Files: ${files?.keys}");
     try {
-      final form = FormData({
+      FormData createForm() => FormData({
         ...?fields,
         ...?files,
       });
-      var res = await patch<T>(url, form);
-      if (res.statusCode == 401 && _canAttemptRefresh(url)) {
-        final refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          debugPrint("🔄 [API RETRY] Retrying safeMultipartPatch: $url with new access token");
-          final retryForm = FormData({
-            ...?fields,
-            ...?files,
-          });
-          res = await patch<T>(url, retryForm);
-        }
-      }
-      return res;
+      final res = await patch<T>(url, createForm());
+      return await _handleResponse401(res, url, () => patch<T>(url, createForm()));
     } catch (e) {
       debugPrint("❌ [API CLIENT MULTIPART PATCH ERROR] [$url]: $e");
       return Response<T>(statusCode: 503, statusText: "Backend unreachable: $e");

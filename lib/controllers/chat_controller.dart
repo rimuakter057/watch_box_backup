@@ -195,6 +195,36 @@ class ChatController extends GetxController {
     return null;
   }
 
+  // Create or retrieve conversation
+  Future<ChatModel?> createOrGetChat({String? recipientId, String? listingId, String? initialMessage}) async {
+    if (!_pref.hasToken) {
+      debugPrint("❌ [CHAT ERROR] Cannot create chat: User not authorized (no access token). No fallback.");
+      Get.snackbar("Authentication Required", "Please sign in to start a conversation.");
+      return null;
+    }
+
+    isLoadingChats.value = true;
+    try {
+      final chat = await _chatApi.createOrGetChat(
+        recipientId: recipientId,
+        listingId: listingId,
+        initialMessage: initialMessage,
+      );
+      if (chat != null) {
+        final existingIdx = chatRooms.indexWhere((c) => c.id == chat.id);
+        if (existingIdx == -1) {
+          chatRooms.insert(0, chat);
+        }
+        return chat;
+      }
+    } catch (e) {
+      debugPrint("❌ [CHAT CONTROLLER] Error creating chat: $e");
+    } finally {
+      isLoadingChats.value = false;
+    }
+    return null;
+  }
+
   // Send message
   Future<bool> sendMessage(String content, {String messageType = 'text', String? fileUrl}) async {
     if (!_pref.hasToken) {

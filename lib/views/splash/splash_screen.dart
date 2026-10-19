@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/prefs/pref_manager.dart';
 import '../../core/theme/app_colors.dart';
+import '../../controllers/auth_controller.dart';
 import 'package:lottie/lottie.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -42,18 +43,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         });
       }
     }
+
+    final auth = Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+    if (auth != null && auth.isLoading.value) {
+      int waitMs = 0;
+      while (auth.isLoading.value && waitMs < 2500) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        waitMs += 100;
+      }
+    }
     
     _navigateNext();
   }
 
   void _navigateNext() {
     final pref = Get.find<PrefManager>();
+    final auth = Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
     if (!pref.hasCompletedOnboarding) {
       Get.offAllNamed('/onboarding');
-    } else if (pref.hasToken) {
+    } else if (pref.hasToken && auth?.currentUser.value != null) {
       Get.offAllNamed('/home');
     } else {
-      debugPrint("❌ [AUTH ERROR] Not authorized: No access token found. Navigating to /login. No fallback.");
+      debugPrint("❌ [AUTH ERROR] Not authorized or session expired: Navigating to /login. No fallback.");
       Get.offAllNamed('/login');
     }
   }

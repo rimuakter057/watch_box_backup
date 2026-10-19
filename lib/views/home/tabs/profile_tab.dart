@@ -11,6 +11,7 @@ import '../../profile/change_password_screen.dart';
 import '../../profile/my_listings_screen.dart';
 import '../../profile/notifications_screen.dart';
 import '../../chat/chat_screen.dart';
+import '../../chat/conversations_screen.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -712,11 +713,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   context: context,
                   icon: Icons.chat_bubble_outline_rounded,
                   title: "Messages & Dealer Chats",
-                  onTap: () => Get.to(() => const ChatScreen(
-                    chatId: "concierge",
-                    title: "Dealer & Support Concierge",
-                    subtitle: "Real-time Live Chat",
-                  )),
+                  onTap: () => Get.to(() => const ConversationsScreen()),
                 ),
                 _buildSettingCard(
                   context: context,

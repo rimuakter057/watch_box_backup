@@ -427,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Footer Link
         GestureDetector(
-          onTap: () => setState(() => _currentState = AuthScreenState.signUp),
+          onTap: () => Get.toNamed('/signup'),
           behavior: HitTestBehavior.opaque,
           child: RichText(
             text: const TextSpan(

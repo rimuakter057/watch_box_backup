@@ -5,7 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:the_watch_box/core/prefs/pref_manager.dart';
 import 'package:the_watch_box/core/network/api_client.dart';
 import 'package:the_watch_box/core/network/services/listings_api_service.dart';
+import 'package:the_watch_box/core/network/services/auth_api_service.dart';
 import 'package:the_watch_box/models/watch_model.dart';
+import 'package:the_watch_box/models/message_model.dart';
 
 void main() {
   setUpAll(() async {
@@ -236,6 +238,38 @@ void main() {
       await pref.setRefreshToken(null);
       final failedRefresh = await client.attemptTokenRefresh();
       expect(failedRefresh, isFalse);
+    });
+
+    test('AuthApiService formatAvatarUrl formats relative and absolute URLs correctly', () {
+      final authApi = AuthApiService();
+      expect(authApi.formatAvatarUrl(null), '');
+      expect(authApi.formatAvatarUrl(''), '');
+      expect(authApi.formatAvatarUrl('https://s3.amazonaws.com/bucket/avatar.jpg'), 'https://s3.amazonaws.com/bucket/avatar.jpg');
+      expect(authApi.formatAvatarUrl('http://cdn.example.com/pic.png'), 'http://cdn.example.com/pic.png');
+      
+      final formatted = authApi.formatAvatarUrl('/internal/uploads/avatars/user123.jpg');
+      expect(formatted.startsWith('https://api.mywatchbox.net'), isTrue);
+      expect(formatted.endsWith('/internal/uploads/avatars/user123.jpg'), isTrue);
+    });
+
+    test('ChatModel parses support ticket and dealer conversations accurately', () {
+      final ticketMap = {
+        'id': 'ticket-991',
+        'subject': 'Inquiry on Rolex Submariner',
+        'message': 'Is this timepiece still available in Geneva?',
+        'unreadCount': 2,
+        'watchTitle': 'Rolex Submariner Date',
+        'avatarUrl': 'https://images.example.com/dealer.jpg',
+        'createdAt': '2026-10-18T10:00:00.000Z',
+      };
+
+      final chat = ChatModel.fromMap(ticketMap);
+      expect(chat.id, 'ticket-991');
+      expect(chat.name, 'Inquiry on Rolex Submariner');
+      expect(chat.lastMessage, 'Is this timepiece still available in Geneva?');
+      expect(chat.unreadCount, 2);
+      expect(chat.watchTitle, 'Rolex Submariner Date');
+      expect(chat.avatarUrl, 'https://images.example.com/dealer.jpg');
     });
   });
 }

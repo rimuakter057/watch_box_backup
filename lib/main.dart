@@ -11,11 +11,13 @@ import 'controllers/onboarding_controller.dart';
 import 'views/splash/splash_screen.dart';
 import 'views/onboarding/onboarding_screen.dart';
 import 'views/auth/login_screen.dart';
+import 'views/auth/sign_up_screen.dart';
 import 'views/home/home_screen.dart';
 import 'views/profile/subscription_plans_screen.dart';
 import 'views/profile/notifications_screen.dart';
 import 'views/profile/account_settings_screen.dart';
 import 'views/profile/change_password_screen.dart';
+import 'views/chat/conversations_screen.dart';
 import 'core/db/db_helper.dart';
 import 'core/network/api_client.dart';
 import 'core/network/services/auth_api_service.dart';
@@ -96,6 +98,10 @@ class TheWatchBoxApp extends StatelessWidget {
               page: () => const LoginScreen(),
             ),
             GetPage(
+              name: '/signup',
+              page: () => const SignUpScreen(),
+            ),
+            GetPage(
               name: '/home',
               page: () => const MainContainerScreen(),
             ),
@@ -114,6 +120,10 @@ class TheWatchBoxApp extends StatelessWidget {
             GetPage(
               name: '/change_password',
               page: () => const ChangePasswordScreen(),
+            ),
+            GetPage(
+              name: '/conversations',
+              page: () => const ConversationsScreen(),
             ),
           ],
         );

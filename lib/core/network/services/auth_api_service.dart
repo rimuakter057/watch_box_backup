@@ -82,13 +82,32 @@ class AuthApiService {
     return null;
   }
 
-  Future<Map<String, dynamic>?> register(String name, String email, String password) async {
-    debugPrint("📝 [AUTH API] Requesting registration -> Name: $name | Email: $email");
-    final res = await _api.safePost(ApiEndpoints.register, {
-      'displayName': name,
-      'email': email,
+  Future<Map<String, dynamic>?> register(
+    String name,
+    String email,
+    String password, {
+    String? phone,
+    String? country,
+    double? latitude,
+    double? longitude,
+  }) async {
+    debugPrint("📝 [AUTH API] Requesting registration -> Name: $name | Email: $email | Phone: $phone | Country: $country");
+    final Map<String, dynamic> payload = {
+      'displayName': name.trim(),
+      'email': email.trim().toLowerCase(),
       'password': password,
-    });
+    };
+    if (phone != null && phone.trim().isNotEmpty) {
+      payload['phone'] = phone.trim();
+    }
+    if (country != null && country.trim().isNotEmpty) {
+      payload['country'] = country.trim();
+    }
+    if (latitude != null && longitude != null) {
+      payload['latitude'] = latitude;
+      payload['longitude'] = longitude;
+    }
+    final res = await _api.safePost(ApiEndpoints.register, payload);
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
       final data = body['data'] is Map ? body['data'] as Map<String, dynamic> : body;
@@ -123,13 +142,19 @@ class AuthApiService {
     return false;
   }
 
+  String formatAvatarUrl(String? rawUrl) {
+    if (rawUrl == null || rawUrl.isEmpty) return '';
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      return rawUrl;
+    }
+    final base = _pref.apiBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '').replaceAll(RegExp(r'/+$'), '');
+    final cleanPath = rawUrl.startsWith('/') ? rawUrl : '/$rawUrl';
+    return '$base$cleanPath';
+  }
+
   Future<Map<String, dynamic>?> getProfile() async {
     debugPrint("👤 [PROFILE API] Fetching user profile...");
-    // 1. Try /users/my-profile, fallback to /users/me
-    var res = await _api.safeGet(ApiEndpoints.userMyProfile);
-    if (!res.isOk) {
-      res = await _api.safeGet(ApiEndpoints.userMe);
-    }
+    final res = await _api.safeGet(ApiEndpoints.userMe);
 
     if (res.isOk && res.body != null) {
       final body = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
@@ -143,7 +168,10 @@ class AuthApiService {
         if (data['email'] != null) await _pref.setActiveUserEmail(data['email'].toString());
         if (data['phone'] != null) await _pref.setActiveUserPhone(data['phone'].toString());
         if (data['country'] != null) await _pref.setActiveUserCountry(data['country'].toString());
-        if (data['avatarUrl'] != null) await _pref.setActiveUserAvatarUrl(data['avatarUrl'].toString());
+        if (data['avatarUrl'] != null && data['avatarUrl'].toString().isNotEmpty) {
+          final formatted = formatAvatarUrl(data['avatarUrl'].toString());
+          await _pref.setActiveUserAvatarUrl(formatted);
+        }
         if (data['preferences'] is Map && data['preferences']['currency'] != null) {
           await _pref.setPreferredCurrency(data['preferences']['currency'].toString());
         }
@@ -155,6 +183,23 @@ class AuthApiService {
       return data;
     }
     debugPrint("⚠️ [PROFILE API] Failed to fetch profile -> StatusCode: ${res.statusCode} | Text: ${res.statusText}");
+    return null;
+  }
+
+  Future<String?> getAvatar() async {
+    debugPrint("🖼️ [PROFILE API] Fetching avatar from server...");
+    final res = await _api.safeGet(ApiEndpoints.userAvatar);
+    if (res.isOk && res.body != null) {
+      final resBody = res.body is Map ? res.body as Map<String, dynamic> : <String, dynamic>{};
+      final data = resBody['data'] is Map ? resBody['data'] as Map<String, dynamic> : resBody;
+      final rawAvatar = data['avatarUrl']?.toString();
+      if (rawAvatar != null && rawAvatar.isNotEmpty) {
+        final formatted = formatAvatarUrl(rawAvatar);
+        await _pref.setActiveUserAvatarUrl(formatted);
+        debugPrint("✅ [PROFILE API] Live avatar URL fetched and synced: $formatted");
+        return formatted;
+      }
+    }
     return null;
   }
 

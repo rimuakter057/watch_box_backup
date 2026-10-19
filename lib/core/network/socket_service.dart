@@ -41,13 +41,17 @@ class SocketService extends GetxService {
 
     final rawBaseUrl = _pref.apiBaseUrl;
     // Strip trailing /api/v1 and slashes if present for root websocket endpoint
-    final socketUrl = rawBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '').replaceAll(RegExp(r'/+$'), '');
+    var socketUrl = rawBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '').replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(socketUrl);
+    if (uri != null && uri.scheme == 'https' && (uri.port == 0 || !socketUrl.contains(':443'))) {
+      socketUrl = 'https://${uri.host}:443';
+    }
     debugPrint("🔌 [SOCKET] Connecting to live Socket.io server at: $socketUrl");
 
     _socket = IO.io(
       socketUrl,
       IO.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(['websocket', 'polling'])
           .disableAutoConnect()
           .enableReconnection()
           .setReconnectionDelay(5000)

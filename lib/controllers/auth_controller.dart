@@ -82,7 +82,18 @@ class AuthController extends GetxController {
         final plan = (profileData['plan'] ?? existingUser?.plan ?? _pref.activeUserPlan).toString();
         final phone = profileData['phone']?.toString() ?? _pref.activeUserPhone;
         final country = profileData['country']?.toString() ?? _pref.activeUserCountry;
-        final avatarUrl = profileData['avatarUrl']?.toString() ?? _pref.activeUserAvatarUrl;
+        String? avatarUrl = profileData['avatarUrl']?.toString();
+        if (avatarUrl == null || avatarUrl.isEmpty) {
+          avatarUrl = await _authApi.getAvatar();
+        }
+        if (avatarUrl == null || avatarUrl.isEmpty) {
+          final cached = _pref.activeUserAvatarUrl;
+          if (cached.isNotEmpty) avatarUrl = cached;
+        }
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
+          avatarUrl = _authApi.formatAvatarUrl(avatarUrl);
+        }
+
         final emailVerified = profileData['emailVerified'] == true;
         final currency = (profileData['preferences'] is Map 
             ? profileData['preferences']['currency'] 
@@ -111,6 +122,9 @@ class AuthController extends GetxController {
         if (backendId.isNotEmpty) await _pref.setActiveUserBackendId(backendId);
         await _pref.setActiveUserRole(role);
         await _pref.setActiveUserPlan(plan);
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
+          await _pref.setActiveUserAvatarUrl(avatarUrl);
+        }
         await _pref.setPreferredCurrency(currency);
 
         debugPrint("✅ [AUTH CONTROLLER] Profile successfully fetched and synced into state: ${user.name} <${user.email}> (Verified: $emailVerified, Currency: $currency, Dark: $darkMode)");
@@ -238,12 +252,29 @@ class AuthController extends GetxController {
   }
 
   // Register: Syncs with live backend API (POST /api/v1/auth/register)
-  // Register: Syncs with live backend API (POST /api/v1/auth/register)
-  Future<bool> register(String name, String email, String password, {String role = 'user', String plan = 'free'}) async {
-    debugPrint("📝 [AUTH CONTROLLER] Starting registration for: $name ($email)");
+  Future<bool> register(
+    String name,
+    String email,
+    String password, {
+    String? phone,
+    String? country,
+    double? latitude,
+    double? longitude,
+    String role = 'user',
+    String plan = 'free',
+  }) async {
+    debugPrint("📝 [AUTH CONTROLLER] Starting registration for: $name ($email), Phone: $phone, Country: $country, Role: $role");
     isLoading.value = true;
     try {
-      final res = await _authApi.register(name, email, password);
+      final res = await _authApi.register(
+        name,
+        email,
+        password,
+        phone: phone,
+        country: country,
+        latitude: latitude,
+        longitude: longitude,
+      );
       if (res != null) {
         debugPrint("✅ [AUTH CONTROLLER] Live backend register succeeded for: $email");
       } else {
@@ -259,7 +290,15 @@ class AuthController extends GetxController {
       return false;
     }
 
-    return await login(name, role, plan, email: email, password: password);
+    final loginSuccess = await login(name, role, plan, email: email, password: password);
+    if (loginSuccess && (phone != null || country != null)) {
+      await updateProfile(
+        displayName: name,
+        phone: phone,
+        country: country,
+      );
+    }
+    return loginSuccess;
   }
 
   // Update Profile: calls PATCH /api/v1/users/me
@@ -439,6 +478,25 @@ class AuthController extends GetxController {
       final success = await _authApi.changePassword(currentPassword, newPassword);
       if (success) {
         debugPrint("✅ [AUTH CONTROLLER] Password changed successfully on backend.");
+
+        // Backend revokes all active sessions upon password change (auth.service.ts: sessions.revokeAll).
+        // Automatically re-authenticate immediately with the new password to establish a fresh active session.
+        final email = currentUser.value?.email.isNotEmpty == true 
+            ? currentUser.value!.email 
+            : _pref.activeUserEmail;
+            
+        if (email.isNotEmpty) {
+          debugPrint("🔄 [AUTH CONTROLLER] Re-authenticating with new password for $email to establish active session...");
+          final loginData = await _authApi.login(email, newPassword);
+          if (loginData != null) {
+            debugPrint("✅ [AUTH CONTROLLER] Re-authentication succeeded. Fresh session active.");
+            await fetchProfile();
+          } else {
+            debugPrint("⚠️ [AUTH CONTROLLER] Re-authentication failed after password change. Clearing session.");
+            handleSessionExpired();
+          }
+        }
+
         Get.snackbar("Success", "Password updated successfully on server.");
         return true;
       } else {
