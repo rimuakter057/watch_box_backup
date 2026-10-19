@@ -8,7 +8,7 @@ import 'tabs/profile_tab.dart';
 import '../widgets/navbar/custom_navbar.dart';
 import 'traders_collections_screen.dart';
 import '../profile/my_listings_screen.dart';
-
+import '../chat/conversations_screen.dart';
 import 'tabs/listings_tab.dart';
 
 class MainContainerScreen extends StatefulWidget {
@@ -40,6 +40,10 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
     _tabs = [
       HomeTab(
         onTabChangeRequested: (index) {
+          if (index == 2) {
+            _showMarketplaceBottomSheet(context);
+            return;
+          }
           setState(() {
             _currentIndex = index;
           });
@@ -78,6 +82,19 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
     }
   }
 
+  void _showMarketplaceBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => MarketplaceListingsBottomSheet(
+        onSelectBrowseAll: () {
+          setState(() => _currentIndex = 2);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,6 +111,10 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
       bottomNavigationBar: CustomNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
+          if (index == 2) {
+            _showMarketplaceBottomSheet(context);
+            return;
+          }
           setState(() {
             _currentIndex = index;
           });
@@ -107,11 +128,16 @@ class _MainContainerScreenState extends State<MainContainerScreen> {
 // MARKETPLACE & LISTINGS BOTTOM SHEET (EXACT SCREENSHOT DESIGN)
 // ---------------------------------------------------------------------------
 class MarketplaceListingsBottomSheet extends StatelessWidget {
-  const MarketplaceListingsBottomSheet({super.key});
+  final VoidCallback? onSelectBrowseAll;
+
+  const MarketplaceListingsBottomSheet({super.key, this.onSelectBrowseAll});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
@@ -125,78 +151,106 @@ class MarketplaceListingsBottomSheet extends StatelessWidget {
         ],
       ),
       child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Drag Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Drag Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
+              const SizedBox(height: 18),
 
-            // Header (Marketplace & Listings + Close button)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "Marketplace & Listings",
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  behavior: HitTestBehavior.opaque,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.close_rounded,
-                      color: Color(0xFF64748B),
-                      size: 22,
+              // Header (Marketplace & Listings + Close button)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Marketplace & Listings",
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
+                      letterSpacing: -0.3,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFF64748B),
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
 
-            // Card 1: Trader Collections
-            _buildOptionCard(
-              context: context,
-              title: "Trader Collections",
-              subtitle: "Browse in-app listings from other community traders",
-              icon: Icons.storefront_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                Get.to(() => const TradersCollectionsScreen());
-              },
-            ),
-            const SizedBox(height: 14),
+              // Card 1: Browse All Listings
+              _buildOptionCard(
+                context: context,
+                title: "Browse All Listings",
+                subtitle: "Explore verified marketplace watches and active inventory",
+                icon: Icons.explore_outlined,
+                onTap: () {
+                  Navigator.pop(context);
+                  onSelectBrowseAll?.call();
+                },
+              ),
+              const SizedBox(height: 14),
 
-            // Card 2: My Listings
-            _buildOptionCard(
-              context: context,
-              title: "My Listings",
-              subtitle: "View and manage your active and sold watch listings",
-              icon: Icons.inventory_2_outlined,
-              onTap: () {
-                Navigator.pop(context);
-                Get.to(() => const MyListingsScreen());
-              },
-            ),
-            const SizedBox(height: 14),
-          ],
+              // Card 2: Trader Collections
+              _buildOptionCard(
+                context: context,
+                title: "Trader Collections",
+                subtitle: "Browse in-app listings from other community traders",
+                icon: Icons.storefront_rounded,
+                onTap: () {
+                  Navigator.pop(context);
+                  Get.to(() => const TradersCollectionsScreen());
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // Card 3: My Listings
+              _buildOptionCard(
+                context: context,
+                title: "My Listings",
+                subtitle: "View and manage your active and sold watch listings",
+                icon: Icons.inventory_2_outlined,
+                onTap: () {
+                  Navigator.pop(context);
+                  Get.to(() => const MyListingsScreen());
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // Card 4: Dealer & Seller Messages
+              _buildOptionCard(
+                context: context,
+                title: "Dealer & Seller Messages",
+                subtitle: "Chat, inquire, and negotiate with watch dealers and sellers",
+                icon: Icons.chat_bubble_outline_rounded,
+                onTap: () {
+                  Navigator.pop(context);
+                  Get.to(() => const ConversationsScreen());
+                },
+              ),
+              const SizedBox(height: 14),
+            ],
+          ),
         ),
       ),
     );

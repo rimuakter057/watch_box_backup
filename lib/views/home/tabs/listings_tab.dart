@@ -10,6 +10,7 @@ import '../../widgets/watch_background.dart';
 import '../../widgets/create_listing_sheet.dart';
 import '../watch_detail_screen.dart';
 import '../../chat/chat_screen.dart';
+import '../../chat/conversations_screen.dart';
 
 class ListingsTab extends StatefulWidget {
   final int initialTabIndex;
@@ -279,6 +280,11 @@ class _ListingsTabState extends State<ListingsTab> with SingleTickerProviderStat
                     ),
                     Row(
                       children: [
+                        IconButton(
+                          icon: Icon(Icons.chat_bubble_outline_rounded, color: context.isDarkTheme ? Colors.white : const Color(0xFF07274C)),
+                          onPressed: () => Get.to(() => const ConversationsScreen()),
+                          tooltip: "Dealer & Seller Messages",
+                        ),
                         IconButton(
                           icon: Icon(Icons.refresh_rounded, color: context.isDarkTheme ? Colors.white70 : const Color(0xFF07274C)),
                           onPressed: () {
