@@ -33,10 +33,46 @@ class SearchApiService {
     final res = await _api.safeGet(ApiEndpoints.search, query: params);
     if (res.isOk && res.body != null) {
       final listData = ApiClient.extractList(res.body);
-      if (listData != null) {
+      if (listData != null && listData.isNotEmpty) {
         return listData.whereType<Map>().map((item) => WatchModel.fromMap(Map<String, dynamic>.from(item))).toList();
       }
+
+      // Check if data is a Map with marketplace items (ebay / localStore)
+      if (res.body is Map && res.body['data'] is Map) {
+        final data = res.body['data'] as Map;
+        final List<dynamic> combined = [];
+        if (data['ebay'] is Map && data['ebay']['items'] is List) {
+          combined.addAll(data['ebay']['items']);
+        }
+        if (data['localStore'] is Map && data['localStore']['items'] is List) {
+          combined.addAll(data['localStore']['items']);
+        }
+        if (combined.isNotEmpty) {
+          return combined.whereType<Map>().map((item) => WatchModel.fromMap(Map<String, dynamic>.from(item))).toList();
+        }
+      }
     }
+
+    // Fallback to /marketplaces/search if /search returned 0 results
+    try {
+      final fallbackRes = await _api.safeGet('/marketplaces/search', query: params);
+      if (fallbackRes.isOk && fallbackRes.body != null) {
+        if (fallbackRes.body is Map && fallbackRes.body['data'] is Map) {
+          final data = fallbackRes.body['data'] as Map;
+          final List<dynamic> combined = [];
+          if (data['ebay'] is Map && data['ebay']['items'] is List) {
+            combined.addAll(data['ebay']['items']);
+          }
+          if (data['localStore'] is Map && data['localStore']['items'] is List) {
+            combined.addAll(data['localStore']['items']);
+          }
+          if (combined.isNotEmpty) {
+            return combined.whereType<Map>().map((item) => WatchModel.fromMap(Map<String, dynamic>.from(item))).toList();
+          }
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 
