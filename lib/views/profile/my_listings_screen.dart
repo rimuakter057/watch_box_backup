@@ -334,8 +334,9 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSoldTab() {
     if (_soldListings.isEmpty) {
@@ -490,6 +491,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 }
