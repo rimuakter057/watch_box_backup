@@ -63,7 +63,7 @@ class _ListingsTabState extends State<ListingsTab> with SingleTickerProviderStat
     try {
       final list = await _listingsApi.getListings(page: 1, limit: 50);
       if (list != null) {
-        _allListings.assignAll(list);
+        _allListings.assignAll(list.where((w) => !w.isSold).toList());
       } else {
         _allListings.clear();
       }
@@ -78,20 +78,46 @@ class _ListingsTabState extends State<ListingsTab> with SingleTickerProviderStat
   Future<void> _fetchInAppListings() async {
     _isLoadingInApp.value = true;
     try {
-      final list = await _listingsApi.getTraderCollections();
-      if (list != null && list.isNotEmpty) {
-        final inApp = list.where((w) => w.isInApp && !w.isEbay).toList();
-        _inAppListings.assignAll(inApp);
-      } else {
-        // Retrieve listings from /listings API
-        final all = await _listingsApi.getListings(page: 1, limit: 50);
-        if (all != null && all.isNotEmpty) {
-          final inAppOnly = all.where((w) => w.isInApp && !w.isEbay).toList();
-          _inAppListings.assignAll(inAppOnly);
-        } else {
-          _inAppListings.clear();
+      final List<WatchModel> combined = [];
+      final Set<String> seenIds = {};
+
+      // 1. Live community in-app listings from /listings (includes newly created listings)
+      final all = await _listingsApi.getListings(page: 1, limit: 50);
+      if (all != null && all.isNotEmpty) {
+        for (final w in all) {
+          if (w.isInApp && !w.isEbay && !w.isSold) {
+            final id = w.idString;
+            if (id.isNotEmpty) {
+              if (!seenIds.contains(id)) {
+                seenIds.add(id);
+                combined.add(w);
+              }
+            } else {
+              combined.add(w);
+            }
+          }
         }
       }
+
+      // 2. Peer trader collections
+      final traders = await _listingsApi.getTraderCollections();
+      if (traders != null && traders.isNotEmpty) {
+        for (final w in traders) {
+          if (w.isInApp && !w.isEbay && !w.isSold) {
+            final id = w.idString;
+            if (id.isNotEmpty) {
+              if (!seenIds.contains(id)) {
+                seenIds.add(id);
+                combined.add(w);
+              }
+            } else {
+              combined.add(w);
+            }
+          }
+        }
+      }
+
+      _inAppListings.assignAll(combined);
     } catch (e) {
       debugPrint("❌ [LISTINGS TAB] Error fetching in-app listings: $e");
       _inAppListings.clear();
@@ -299,6 +325,9 @@ class _ListingsTabState extends State<ListingsTab> with SingleTickerProviderStat
                             CreateListingSheet.show(context, onListingCreated: () {
                               _fetchInAppListings();
                               _fetchAllListings();
+                              if (_tabController.index != 1) {
+                                _tabController.animateTo(1);
+                              }
                             });
                           },
                           tooltip: "List a Timepiece",
@@ -450,6 +479,9 @@ class _ListingsTabState extends State<ListingsTab> with SingleTickerProviderStat
           CreateListingSheet.show(context, onListingCreated: () {
             _fetchInAppListings();
             _fetchAllListings();
+            if (_tabController.index != 1) {
+              _tabController.animateTo(1);
+            }
           });
         },
         backgroundColor: context.primaryNav,

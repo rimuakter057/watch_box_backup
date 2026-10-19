@@ -33,7 +33,27 @@ class ListingsApiService {
   }
 
   Future<List<WatchModel>?> getMyListings({String status = 'active'}) async {
-    final res = await _api.safeGet(ApiEndpoints.myListings, query: {'status': status});
+    // 1. Try dedicated path (/me/listings/active or /me/listings/sold)
+    final specificPath = status == 'sold' ? '${ApiEndpoints.myListings}/sold' : '${ApiEndpoints.myListings}/active';
+    var res = await _api.safeGet(specificPath);
+    if (res.isOk && res.body != null) {
+      final list = ApiClient.extractList(res.body);
+      if (list != null && list.isNotEmpty) {
+        return list.whereType<Map>().map((e) => WatchModel.fromMap(Map<String, dynamic>.from(e))).toList();
+      }
+    }
+
+    // 2. Query /me/listings with status filter
+    res = await _api.safeGet(ApiEndpoints.myListings, query: {'status': status});
+    if (res.isOk && res.body != null) {
+      final list = ApiClient.extractList(res.body);
+      if (list != null && list.isNotEmpty) {
+        return list.whereType<Map>().map((e) => WatchModel.fromMap(Map<String, dynamic>.from(e))).toList();
+      }
+    }
+
+    // 3. Fallback to /listings?status=...
+    res = await _api.safeGet(ApiEndpoints.listings, query: {'status': status});
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
       if (list != null) {

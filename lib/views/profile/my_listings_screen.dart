@@ -67,7 +67,12 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
   }
 
   void _showAddListingSheet() {
-    CreateListingSheet.show(context, onListingCreated: _loadAllListings);
+    CreateListingSheet.show(context, onListingCreated: () {
+      _loadAllListings();
+      if (_tabController.index != 0) {
+        _tabController.animateTo(0);
+      }
+    });
   }
 
   void _showGenerateInvoiceDialog(WatchModel watch) {

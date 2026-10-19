@@ -38,11 +38,11 @@ class ApiEndpoints {
 
   // Listings, Posts & Trader Hub
   static const String listings = '/listings';
-  static const String myListings = '/listings';
+  static const String myListings = '/me/listings';
   static const String posts = '/listings';
   static const String postsCreate = '/listings';
   static const String postsGetAll = '/listings';
-  static const String postsMy = '/listings';
+  static const String postsMy = '/me/listings';
   static const String postsView = '/listings';
   static const String postsDelete = '/listings';
   static const String postsToggleSave = '/saved-products';

@@ -398,10 +398,29 @@ class WatchSearchController extends GetxController {
 
     try {
       final liveList = await _listingsApi.getMyListings(status: isSold ? 'sold' : 'active');
+      if (liveList != null && liveList.isNotEmpty) {
+        return liveList.where((w) => isSold ? w.isSold : !w.isSold).toList();
+      }
+
+      // Fallback: check /listings filtering by current user's ID
+      final myId = pref.userId;
+      if (myId.isNotEmpty) {
+        final allListings = await _listingsApi.getListings(page: 1, limit: 100);
+        if (allListings != null && allListings.isNotEmpty) {
+          final filtered = allListings.where((w) {
+            final isOwner = (w.ownerId != null && w.ownerId == myId) ||
+                            (w.userId != null && w.userId.toString() == myId);
+            return isOwner && (isSold ? w.isSold : !w.isSold);
+          }).toList();
+          if (filtered.isNotEmpty) {
+            return filtered;
+          }
+        }
+      }
+
       if (liveList != null) {
         return liveList;
       }
-      debugPrint("❌ [LISTINGS ERROR] Failed to fetch user listings / not authorized. No fallback.");
       return [];
     } catch (e) {
       debugPrint("❌ [LISTINGS ERROR] Error loading user listings: $e. No fallback.");
@@ -437,6 +456,7 @@ class WatchSearchController extends GetxController {
         'price': price,
         'currency': currency,
         'platform': 'in-app',
+        'status': 'active',
       };
       if (referenceNumber != null && referenceNumber.trim().isNotEmpty) {
         payload['referenceNumber'] = referenceNumber.trim();
@@ -461,7 +481,6 @@ class WatchSearchController extends GetxController {
       );
       if (res != null) {
         debugPrint("✅ [SEARCH CONTROLLER] Custom listing created successfully on backend.");
-        Get.snackbar("Success", "Listing created successfully.");
         return true;
       } else {
         debugPrint("❌ [LISTINGS ERROR] Listing creation rejected by backend / conflict. No fallback.");

@@ -160,8 +160,22 @@ class _CreateListingSheetState extends State<CreateListingSheet> {
       );
 
       if (success) {
-        Get.back();
+        if (Get.isBottomSheetOpen == true) {
+          Get.back(result: true);
+        } else if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(true);
+        }
+
         widget.onListingCreated?.call();
+
+        Get.snackbar(
+          "Success",
+          "Listing created successfully.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFF10B981),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
       }
     } finally {
       if (mounted) {
