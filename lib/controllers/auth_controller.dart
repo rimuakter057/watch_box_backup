@@ -306,6 +306,7 @@ class AuthController extends GetxController {
     String? displayName,
     String? phone,
     String? country,
+    String? avatarUrl,
     List<int>? profileImageBytes,
     String? profileImageName,
     List<int>? bannerImageBytes,
@@ -317,13 +318,14 @@ class AuthController extends GetxController {
       return false;
     }
 
-    debugPrint("✏️ [AUTH CONTROLLER] Triggering updateProfile: Name=$displayName, Phone=$phone, Country=$country, HasAvatar=${profileImageBytes != null}");
+    debugPrint("✏️ [AUTH CONTROLLER] Triggering updateProfile: Name=$displayName, Phone=$phone, Country=$country, HasAvatar=${profileImageBytes != null || avatarUrl != null}");
     isLoading.value = true;
     try {
       final resData = await _authApi.updateProfile(
         displayName: displayName,
         phone: phone,
         country: country,
+        avatarUrl: avatarUrl,
         profileImageBytes: profileImageBytes,
         profileImageName: profileImageName,
         bannerImageBytes: bannerImageBytes,
@@ -336,23 +338,11 @@ class AuthController extends GetxController {
         return false;
       }
 
-      final existing = currentUser.value;
-      if (existing != null) {
-        final newName = displayName ?? existing.name;
-        final newAvatar = resData['avatarUrl']?.toString() ?? existing.avatarUrl;
-        final updatedUser = existing.copyWith(
-          name: newName,
-          phone: phone ?? existing.phone,
-          country: country ?? existing.country,
-          avatarUrl: newAvatar,
-        );
-        currentUser.value = updatedUser;
-        if (displayName != null) await _pref.setActiveUserName(displayName);
-        if (phone != null) await _pref.setActiveUserPhone(phone);
-        if (country != null) await _pref.setActiveUserCountry(country);
-        if (newAvatar != null) await _pref.setActiveUserAvatarUrl(newAvatar);
-      }
-      debugPrint("✅ [AUTH CONTROLLER] Profile updated successfully in state & preferences.");
+      // Immediate live profile re-fetch right after updating
+      debugPrint("🔄 [AUTH CONTROLLER] Immediately re-fetching live profile from server after update...");
+      await fetchProfile();
+
+      debugPrint("✅ [AUTH CONTROLLER] Profile updated & live profile fetched successfully.");
       Get.snackbar("Success", "Profile updated successfully.");
       return true;
     } catch (e) {
@@ -371,17 +361,25 @@ class AuthController extends GetxController {
       return false;
     }
 
-    debugPrint("📷 [AUTH CONTROLLER] Uploading profile picture (${imageBytes.length} bytes)...");
+    debugPrint("📷 [AUTH CONTROLLER] Updating profile picture (${imageBytes.length} bytes) via updateProfile...");
     isLoading.value = true;
     try {
+      // 1. Update profile picture within updateProfile API
+      final success = await updateProfile(
+        profileImageBytes: imageBytes,
+        profileImageName: filename,
+      );
+      if (success) {
+        debugPrint("✅ [AUTH CONTROLLER] Profile picture updated within profile update & live profile refreshed!");
+        return true;
+      }
+
+      // 2. Direct avatar endpoint fallback
       final avatarUrl = await _authApi.uploadAvatar(imageBytes, filename);
       if (avatarUrl != null && avatarUrl.isNotEmpty) {
-        final existing = currentUser.value;
-        if (existing != null) {
-          currentUser.value = existing.copyWith(avatarUrl: avatarUrl);
-          await _pref.setActiveUserAvatarUrl(avatarUrl);
-        }
-        debugPrint("✅ [AUTH CONTROLLER] Profile picture updated successfully to: $avatarUrl");
+        // Immediately fetch live profile right after updating
+        await fetchProfile();
+        debugPrint("✅ [AUTH CONTROLLER] Profile picture uploaded & live profile refreshed: $avatarUrl");
         Get.snackbar("Success", "Profile picture updated successfully!");
         return true;
       } else {

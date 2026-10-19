@@ -22,32 +22,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
 
-  // Role & Plan selection
-  String _selectedRole = "user"; // 'user' (Collector) or 'dealer' (Dealer/Trader)
-  final String _selectedPlan = "free";
-
   // Form toggles
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
-  bool _shareLocation = true; // Enables nearby watchmaker & dealer discovery
 
-  // Coordinates mapping for major watch hubs
-  static const Map<String, List<double>> _countryCoordinates = {
-    "United States": [40.7128, -74.0060], // New York
-    "Switzerland": [46.2044, 6.1432],    // Geneva
-    "United Kingdom": [51.5074, -0.1278], // London
-    "United Arab Emirates": [25.2048, 55.2708], // Dubai
-    "Japan": [35.6762, 139.6503],        // Tokyo
-    "Germany": [50.1109, 8.6821],        // Frankfurt
-    "Singapore": [1.3521, 103.8198],     // Singapore
-    "France": [48.8566, 2.3522],         // Paris
-    "Italy": [45.4642, 9.1900],          // Milan
-    "Hong Kong": [22.3193, 114.1694],    // Hong Kong
-    "Canada": [43.6532, -79.3832],       // Toronto
-    "Australia": [-33.8688, 151.2093],   // Sydney
-    "Bangladesh": [23.8103, 90.4125],    // Dhaka
-  };
+  // Major country list for selection
+  static const List<String> _countries = [
+    "United States",
+    "Switzerland",
+    "United Kingdom",
+    "United Arab Emirates",
+    "Japan",
+    "Germany",
+    "Singapore",
+    "France",
+    "Italy",
+    "Hong Kong",
+    "Canada",
+    "Australia",
+    "Bangladesh",
+  ];
 
   @override
   void dispose() {
@@ -103,7 +98,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _openCountryPicker() {
     final isDark = context.isDarkTheme;
-    final countries = _countryCoordinates.keys.toList();
 
     showModalBottomSheet(
       context: context,
@@ -145,13 +139,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
               const Divider(height: 1),
               Expanded(
                 child: ListView.separated(
-                  itemCount: countries.length,
+                  itemCount: _countries.length,
                   separatorBuilder: (ctx, index) => Divider(
                     height: 1,
                     color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
                   ),
                   itemBuilder: (ctx, index) {
-                    final country = countries[index];
+                    final country = _countries[index];
                     final isSelected = _countryController.text.trim() == country;
                     return ListTile(
                       title: Text(
@@ -249,18 +243,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    // Determine location coordinates if location sharing enabled
-    double? latitude;
-    double? longitude;
-    if (_shareLocation) {
-      final coords = _countryCoordinates[country] ?? _countryCoordinates["United States"];
-      if (coords != null) {
-        latitude = coords[0];
-        longitude = coords[1];
-      }
-    }
-
-    debugPrint("📱 [SIGN UP SCREEN] Submitting Registration -> Name: '$name' | Email: '$email' | Phone: '$phone' | Country: '$country' | Role: '$_selectedRole' | Location: ${latitude != null ? '$latitude,$longitude' : 'None'}");
+    debugPrint("📱 [SIGN UP SCREEN] Submitting Registration -> Name: '$name' | Email: '$email' | Phone: '$phone' | Country: '$country'");
 
     final success = await _authController.register(
       name,
@@ -268,10 +251,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       password,
       phone: phone.isNotEmpty ? phone : null,
       country: country.isNotEmpty ? country : null,
-      latitude: latitude,
-      longitude: longitude,
-      role: _selectedRole,
-      plan: _selectedPlan,
     );
 
     if (success) {
@@ -450,7 +429,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            "Enter your details to register with the watch marketplace network.",
+            "Enter your details to create an authenticated account.",
             style: TextStyle(
               fontSize: 13,
               color: Color(0xFF64748B),
@@ -458,41 +437,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Role Selection (Collector vs Watch Dealer)
-          const Text(
-            "Account Type",
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildRoleCard(
-                  title: "Collector",
-                  subtitle: "Buy & Track Pieces",
-                  icon: Icons.watch_outlined,
-                  isSelected: _selectedRole == "user",
-                  onTap: () => setState(() => _selectedRole = "user"),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildRoleCard(
-                  title: "Dealer",
-                  subtitle: "List & Trade Watches",
-                  icon: Icons.storefront_outlined,
-                  isSelected: _selectedRole == "dealer",
-                  onTap: () => setState(() => _selectedRole = "dealer"),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
 
           // Display Name / Full Name (Required by backend API)
           _buildFieldLabel("Full Name / Display Name *"),
@@ -515,7 +459,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Phone Number (Supported by profile & dealer network)
+          // Phone Number (Supported by profile)
           _buildFieldLabel("Phone Number (Optional)"),
           _buildInputField(
             controller: _phoneController,
@@ -619,51 +563,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Nearby Services & Location Switch (Supported by API coordinates)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: Color(0xFF07274C), size: 22),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Nearby Watch Services",
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        "Attach hub coordinates for local dealer & watchmaker discovery",
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch.adaptive(
-                  value: _shareLocation,
-                  activeTrackColor: const Color(0xFF07274C),
-                  onChanged: (val) => setState(() => _shareLocation = val),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
           // Terms and Conditions Checkbox
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -683,7 +582,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 child: GestureDetector(
                   onTap: () => setState(() => _agreeToTerms = !_agreeToTerms),
                   child: const Text(
-                    "I accept the Terms of Service, Buyer/Seller Authenticity Guidelines & Privacy Policy.",
+                    "I accept the Terms of Service, Authenticity Guidelines & Privacy Policy.",
                     style: TextStyle(
                       fontSize: 12,
                       color: Color(0xFF64748B),
@@ -754,67 +653,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
           color: Color(0xFF475569),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final isDark = context.isDarkTheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF07274C).withValues(alpha: isDark ? 0.25 : 0.08)
-              : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF07274C) : context.borderColor,
-            width: isSelected ? 1.6 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? const Color(0xFF07274C) : const Color(0xFF64748B),
-              size: 24,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected ? const Color(0xFF07274C) : context.textPrimaryColor,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: Color(0xFF64748B),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -207,6 +207,7 @@ class AuthApiService {
     String? displayName,
     String? phone,
     String? country,
+    String? avatarUrl,
     List<int>? profileImageBytes,
     String? profileImageName,
     List<int>? bannerImageBytes,
@@ -222,10 +223,13 @@ class AuthApiService {
     if (country != null && country.trim().isNotEmpty) {
       fields['country'] = country.trim();
     }
+    if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
+      fields['avatarUrl'] = avatarUrl.trim();
+    }
 
     final Map<String, MultipartFile> files = {};
     if (profileImageBytes != null && profileImageBytes.isNotEmpty) {
-      files['profileImage'] = MultipartFile(profileImageBytes, filename: profileImageName ?? 'profile.jpg');
+      files['image'] = MultipartFile(profileImageBytes, filename: profileImageName ?? 'profile.jpg');
     }
     if (bannerImageBytes != null && bannerImageBytes.isNotEmpty) {
       files['profileBanner'] = MultipartFile(bannerImageBytes, filename: bannerImageName ?? 'banner.jpg');
