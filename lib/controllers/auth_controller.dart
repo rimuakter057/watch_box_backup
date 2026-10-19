@@ -361,23 +361,13 @@ class AuthController extends GetxController {
       return false;
     }
 
-    debugPrint("📷 [AUTH CONTROLLER] Updating profile picture (${imageBytes.length} bytes) via updateProfile...");
+    debugPrint("📷 [AUTH CONTROLLER] Uploading profile picture (${imageBytes.length} bytes)...");
     isLoading.value = true;
     try {
-      // 1. Update profile picture within updateProfile API
-      final success = await updateProfile(
-        profileImageBytes: imageBytes,
-        profileImageName: filename,
-      );
-      if (success) {
-        debugPrint("✅ [AUTH CONTROLLER] Profile picture updated within profile update & live profile refreshed!");
-        return true;
-      }
-
-      // 2. Direct avatar endpoint fallback
       final avatarUrl = await _authApi.uploadAvatar(imageBytes, filename);
       if (avatarUrl != null && avatarUrl.isNotEmpty) {
         // Immediately fetch live profile right after updating
+        debugPrint("🔄 [AUTH CONTROLLER] Immediately re-fetching live profile after avatar upload...");
         await fetchProfile();
         debugPrint("✅ [AUTH CONTROLLER] Profile picture uploaded & live profile refreshed: $avatarUrl");
         Get.snackbar("Success", "Profile picture updated successfully!");

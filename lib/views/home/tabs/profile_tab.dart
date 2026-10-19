@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../controllers/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/prefs/pref_manager.dart';
+import '../../../core/network/services/ebay_api_service.dart';
 import '../../widgets/watch_background.dart';
 import '../../profile/subscription_plans_screen.dart';
 import '../../profile/account_settings_screen.dart';
 import '../../profile/change_password_screen.dart';
 import '../../profile/my_listings_screen.dart';
 import '../../profile/notifications_screen.dart';
-import '../../chat/chat_screen.dart';
 import '../../chat/conversations_screen.dart';
-import 'package:image_picker/image_picker.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -21,16 +22,24 @@ class ProfileTab extends StatefulWidget {
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
+class _ProfileTabState extends State<ProfileTab> with WidgetsBindingObserver {
   final AuthController _auth = Get.find<AuthController>();
+  late final EbayApiService _ebayService;
   
   bool _darkMode = false;
-  bool _isEbayConnected = true;
+  bool _isEbayConnected = false;
+  bool _isEbayLoading = true;
+  bool _waitingForEbayReturn = false;
+  String? _ebayUsername;
   String _selectedCurrency = "USD";
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _ebayService = Get.isRegistered<EbayApiService>()
+        ? Get.find<EbayApiService>()
+        : Get.put(EbayApiService());
     final pref = Get.find<PrefManager>();
     _darkMode = pref.isDarkMode;
     _selectedCurrency = pref.preferredCurrency;
@@ -44,21 +53,194 @@ class _ProfileTabState extends State<ProfileTab> {
         debugPrint("📱 [PROFILE TAB] ProfileTab state updated with live backend profile -> Name: ${u.name} | Currency: ${u.currency} | Dark: ${u.darkMode}");
       }
     });
+    _checkEbayStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint("📱 [PROFILE TAB] App resumed -> refreshing eBay status (waiting: $_waitingForEbayReturn)");
+      if (_waitingForEbayReturn) {
+        _waitingForEbayReturn = false;
+        _checkEbayStatus(notifyIfConnected: true);
+      } else {
+        _checkEbayStatus();
+      }
+    }
+  }
+
+  Future<void> _checkEbayStatus({bool notifyIfConnected = false}) async {
+    final status = await _ebayService.getStatus();
+    if (mounted && status != null) {
+      final wasConnected = _isEbayConnected;
+      final isConn = status['connected'] == true;
+      String? username;
+      final conn = status['connection'];
+      if (conn is Map) {
+        username = conn['ebayUserId']?.toString();
+      }
+      setState(() {
+        _isEbayConnected = isConn;
+        _ebayUsername = username;
+        _isEbayLoading = false;
+      });
+      debugPrint("📱 [PROFILE TAB] Live eBay Status -> Connected: $isConn | Username: $username");
+      if (notifyIfConnected && isConn && !wasConnected) {
+        Get.snackbar(
+          "eBay Connected!",
+          username != null && username.isNotEmpty
+              ? "Linked eBay account: $username"
+              : "Your eBay account has been connected successfully.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFF10B981),
+          colorText: Colors.white,
+        );
+      }
+    } else if (mounted) {
+      setState(() => _isEbayLoading = false);
+    }
   }
 
   void _toggleEbayConnection() {
-    setState(() {
-      _isEbayConnected = !_isEbayConnected;
-    });
-    Get.snackbar(
-      _isEbayConnected ? "eBay Connected" : "eBay Disconnected",
-      _isEbayConnected 
-          ? "Your eBay trading account has been reconnected." 
-          : "Your eBay account was disconnected from live syncing.",
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
-      colorText: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
+    if (_isEbayLoading) return;
+    if (_isEbayConnected) {
+      _handleDisconnectEbay();
+    } else {
+      _handleConnectEbay();
+    }
+  }
+
+  Future<void> _handleDisconnectEbay() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Disconnect eBay",
+          style: TextStyle(
+            color: context.isDarkTheme ? Colors.white : const Color(0xFF0F172A),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          _ebayUsername != null && _ebayUsername!.isNotEmpty
+              ? "Are you sure you want to disconnect eBay account '$_ebayUsername'?"
+              : "Are you sure you want to disconnect your linked eBay seller account?",
+          style: TextStyle(
+            color: context.isDarkTheme ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              "Cancel",
+              style: TextStyle(
+                color: context.isDarkTheme ? Colors.white70 : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              "Disconnect",
+              style: TextStyle(
+                color: Color(0xFFEF4444),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+
+    if (confirm != true) return;
+
+    setState(() => _isEbayLoading = true);
+    final ok = await _ebayService.disconnect();
+    if (mounted) {
+      setState(() {
+        _isEbayLoading = false;
+        if (ok) {
+          _isEbayConnected = false;
+          _ebayUsername = null;
+        }
+      });
+      Get.snackbar(
+        ok ? "eBay Disconnected" : "Disconnect Failed",
+        ok
+            ? "Your eBay trading account has been disconnected."
+            : "Could not disconnect eBay account. Please try again.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: ok
+            ? (context.isDarkTheme ? AppColors.surfaceDark : Colors.white)
+            : const Color(0xFFEF4444),
+        colorText: ok
+            ? (context.isDarkTheme ? Colors.white : const Color(0xFF0F172A))
+            : Colors.white,
+      );
+    }
+  }
+
+  Future<void> _handleConnectEbay() async {
+    setState(() => _isEbayLoading = true);
+    final url = await _ebayService.getConnectUrl();
+    if (mounted) {
+      setState(() => _isEbayLoading = false);
+    }
+    if (url != null && url.isNotEmpty) {
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        _waitingForEbayReturn = true;
+        bool launched = false;
+        try {
+          // Attempt external application first (Chrome / default browser)
+          launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint("⚠️ [PROFILE TAB] External app launch failed: $e. Retrying with platform default...");
+        }
+        if (!launched) {
+          try {
+            launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+          } catch (e) {
+            debugPrint("❌ [PROFILE TAB] Platform default launch failed: $e");
+          }
+        }
+        if (!launched) {
+          _waitingForEbayReturn = false;
+          Get.snackbar(
+            "Error",
+            "Could not open eBay authorization page. Please check if a web browser is installed.",
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: const Color(0xFFEF4444),
+            colorText: Colors.white,
+          );
+        }
+      } else {
+        Get.snackbar(
+          "Error",
+          "Invalid eBay authorization URL received.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFEF4444),
+          colorText: Colors.white,
+        );
+      }
+    } else {
+      Get.snackbar(
+        "Connection Error",
+        "Could not generate eBay OAuth link. Please check your network connection.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFEF4444),
+        colorText: Colors.white,
+      );
+    }
   }
 
   Future<void> _pickAndUploadAvatar(ImageSource source) async {
@@ -75,6 +257,8 @@ class _ProfileTabState extends State<ProfileTab> {
       final bytes = await image.readAsBytes();
       final filename = image.name;
 
+      if (!mounted) return;
+      final bool isDark = context.isDarkTheme;
       Get.showOverlay(
         asyncFunction: () async {
           await _auth.updateAvatar(bytes, filename);
@@ -83,7 +267,7 @@ class _ProfileTabState extends State<ProfileTab> {
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: context.isDarkTheme ? AppColors.surfaceDark : Colors.white,
+              color: isDark ? AppColors.surfaceDark : Colors.white,
               borderRadius: BorderRadius.circular(16),
             ),
             child: const CircularProgressIndicator(
@@ -326,7 +510,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.12),
+                                  color: Colors.black.withValues(alpha: 0.12),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
                                 ),
@@ -374,7 +558,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                 border: Border.all(color: Colors.white, width: 2),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
+                                    color: Colors.black.withValues(alpha: 0.25),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -637,8 +821,10 @@ class _ProfileTabState extends State<ProfileTab> {
                             const SizedBox(height: 3),
                             Text(
                               _isEbayConnected 
-                                  ? "Connected & Active \u2022 Tap to manage"
-                                  : "Disconnected \u2022 Tap to reconnect",
+                                  ? (_ebayUsername != null && _ebayUsername!.isNotEmpty
+                                      ? "User: $_ebayUsername \u2022 Tap to manage"
+                                      : "Connected & Active \u2022 Tap to manage")
+                                  : "Disconnected \u2022 Tap to connect account",
                               style: TextStyle(
                                 fontSize: 11.5,
                                 color: _isEbayConnected ? const Color(0xFF10B981) : const Color(0xFF64748B),
@@ -649,36 +835,48 @@ class _ProfileTabState extends State<ProfileTab> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      InkWell(
-                        onTap: _toggleEbayConnection,
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _isEbayConnected ? const Color(0xFFFEE2E2) : const Color(0xFFEFF6FE),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _isEbayConnected ? Icons.link_off_rounded : Icons.link_rounded,
-                                color: _isEbayConnected ? const Color(0xFFEF4444) : const Color(0xFF07274C),
-                                size: 15,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _isEbayConnected ? "Disconnect" : "Connect",
-                                style: TextStyle(
-                                  color: _isEbayConnected ? const Color(0xFFEF4444) : const Color(0xFF07274C),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
+                      _isEbayLoading
+                          ? const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                            )
+                          : InkWell(
+                              onTap: _toggleEbayConnection,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: _isEbayConnected ? const Color(0xFFFEE2E2) : const Color(0xFFEFF6FE),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _isEbayConnected ? Icons.link_off_rounded : Icons.link_rounded,
+                                      color: _isEbayConnected ? const Color(0xFFEF4444) : const Color(0xFF07274C),
+                                      size: 15,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _isEbayConnected ? "Disconnect" : "Connect",
+                                      style: TextStyle(
+                                        color: _isEbayConnected ? const Color(0xFFEF4444) : const Color(0xFF07274C),
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                     ],
                   ),
                 ),

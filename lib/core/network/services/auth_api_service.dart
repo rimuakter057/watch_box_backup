@@ -213,6 +213,15 @@ class AuthApiService {
     List<int>? bannerImageBytes,
     String? bannerImageName,
   }) async {
+    Map<String, dynamic>? avatarResult;
+    // 1. If an image is provided, upload it to the live server's avatar endpoint
+    if (profileImageBytes != null && profileImageBytes.isNotEmpty) {
+      final uploadedUrl = await uploadAvatar(profileImageBytes, profileImageName ?? 'avatar.jpg');
+      if (uploadedUrl != null) {
+        avatarResult = {'avatarUrl': uploadedUrl};
+      }
+    }
+
     final Map<String, String> fields = {};
     if (displayName != null && displayName.trim().isNotEmpty) {
       fields['displayName'] = displayName.trim();
@@ -227,28 +236,15 @@ class AuthApiService {
       fields['avatarUrl'] = avatarUrl.trim();
     }
 
-    final Map<String, MultipartFile> files = {};
-    if (profileImageBytes != null && profileImageBytes.isNotEmpty) {
-      files['image'] = MultipartFile(profileImageBytes, filename: profileImageName ?? 'profile.jpg');
-    }
-    if (bannerImageBytes != null && bannerImageBytes.isNotEmpty) {
-      files['profileBanner'] = MultipartFile(bannerImageBytes, filename: bannerImageName ?? 'banner.jpg');
+    // 2. If no text fields are being updated, return avatar result
+    if (fields.isEmpty) {
+      return avatarResult;
     }
 
-    Response res;
-    if (files.isNotEmpty) {
-      debugPrint("✏️ [PROFILE API] Sending multipart update profile with ${files.length} files...");
-      res = await _api.safeMultipartPatch(ApiEndpoints.userUpdateProfile, fields: fields, files: files);
-      if (!res.isOk) {
-        res = await _api.safeMultipartPatch(ApiEndpoints.userMe, fields: fields, files: files);
-      }
-    } else {
-      if (fields.isEmpty) return null;
-      debugPrint("✏️ [PROFILE API] Updating profile fields -> $fields");
-      res = await _api.safePatch(ApiEndpoints.userUpdateProfile, fields);
-      if (!res.isOk) {
-        res = await _api.safePatch(ApiEndpoints.userMe, fields);
-      }
+    debugPrint("✏️ [PROFILE API] Updating profile fields -> $fields");
+    var res = await _api.safePatch(ApiEndpoints.userUpdateProfile, fields);
+    if (!res.isOk) {
+      res = await _api.safePatch(ApiEndpoints.userMe, fields);
     }
 
     if (res.isOk && res.body != null) {

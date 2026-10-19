@@ -6,6 +6,7 @@ import 'package:the_watch_box/core/prefs/pref_manager.dart';
 import 'package:the_watch_box/core/network/api_client.dart';
 import 'package:the_watch_box/core/network/services/listings_api_service.dart';
 import 'package:the_watch_box/core/network/services/auth_api_service.dart';
+import 'package:the_watch_box/core/network/services/ebay_api_service.dart';
 import 'package:the_watch_box/models/watch_model.dart';
 import 'package:the_watch_box/models/message_model.dart';
 
@@ -15,6 +16,7 @@ void main() {
     await Get.putAsync<PrefManager>(() => PrefManager().init());
     Get.put(ApiClient());
     Get.put(ListingsApiService());
+    Get.put(EbayApiService());
   });
 
   group('Marketplace and Listings Tests', () {
@@ -271,5 +273,31 @@ void main() {
       expect(chat.watchTitle, 'Rolex Submariner Date');
       expect(chat.avatarUrl, 'https://images.example.com/dealer.jpg');
     });
+
+    test('EbayApiService is registered and available via GetX', () {
+      final ebayService = Get.find<EbayApiService>();
+      expect(ebayService, isNotNull);
+    });
+
+    test('WatchModel properly parses eBay marketplace listing and redirect URL', () {
+      final ebayItem = {
+        'id': 'v1|123456789012|0',
+        'title': 'Omega Speedmaster Professional Moonwatch',
+        'brand': 'Omega',
+        'model': 'Speedmaster',
+        'price': 5800.0,
+        'platform': 'eBay',
+        'sourceUrl': 'https://www.ebay.com/itm/123456789012',
+        'condition': 'Used - Excellent',
+        'sellerUsername': 'swiss_luxury_watches',
+      };
+
+      final watch = WatchModel.fromMap(ebayItem);
+      expect(watch.isEbay, isTrue);
+      expect(watch.isInApp, isFalse);
+      expect(watch.marketplaceDisplayName, 'eBay Marketplace');
+      expect(watch.redirectUrl, 'https://www.ebay.com/itm/123456789012');
+    });
   });
 }
+

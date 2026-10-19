@@ -18,7 +18,6 @@ import 'views/profile/notifications_screen.dart';
 import 'views/profile/account_settings_screen.dart';
 import 'views/profile/change_password_screen.dart';
 import 'views/chat/conversations_screen.dart';
-import 'core/db/db_helper.dart';
 import 'core/network/api_client.dart';
 import 'core/network/services/auth_api_service.dart';
 import 'core/network/services/search_api_service.dart';
@@ -28,6 +27,7 @@ import 'core/network/services/recommendations_api_service.dart';
 import 'core/network/services/alerts_api_service.dart';
 import 'core/network/services/subscriptions_api_service.dart';
 import 'core/network/services/chat_api_service.dart';
+import 'core/network/services/ebay_api_service.dart';
 import 'core/network/socket_service.dart';
 import 'controllers/chat_controller.dart';
 
@@ -36,7 +36,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Initialize & Inject PrefManager first (asynchronous service)
-  final pref = await Get.putAsync<PrefManager>(() => PrefManager().init());
+  await Get.putAsync<PrefManager>(() => PrefManager().init());
 
   // 1.1 Initialize Network API Client & Domain Services
   Get.put(ApiClient());
@@ -48,6 +48,7 @@ void main() async {
   Get.put(AlertsApiService());
   Get.put(SubscriptionsApiService());
   Get.put(ChatApiService());
+  Get.put(EbayApiService());
   Get.put(SocketService());
 
   // 2. Pre-instantiate core Controllers for global availability

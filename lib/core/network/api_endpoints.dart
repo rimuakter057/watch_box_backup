@@ -83,6 +83,8 @@ class ApiEndpoints {
   static const String messages = '/support/tickets';
 
   // eBay Marketplace
+  static const String ebayConnect = '/ebay/connect';
   static const String ebayStatus = '/ebay/status';
   static const String ebayDisconnect = '/ebay/disconnect';
+  static const String ebaySearch = '/ebay/search';
 }
