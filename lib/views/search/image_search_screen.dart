@@ -92,13 +92,13 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
         _uploadedImageBytes = bytes;
         _uploadedImageName = file.name;
         _isScanning = true;
-        _scanningMessage = "Uploading image to WatchBox AI...";
+        _scanningMessage = "Analyzing image...";
       });
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
       setState(() {
-        _scanningMessage = "Analyzing visual landmarks & horology markers...";
+        _scanningMessage = "Searching listings via /api/v1/search...";
       });
 
       final result = await _visualApi.executeVisualSearch(bytes, file.name);
@@ -129,8 +129,8 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
         });
 
         Get.snackbar(
-          "Visual Scan Successful",
-          "Found ${result.items.length} matching models for '$label'.",
+          "Image Search Successful",
+          "Found ${result.items.length} matching models for '$label' via /api/v1/search.",
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: context.primaryNav.withValues(alpha: 0.95),
           colorText: context.isDarkTheme ? AppColors.backgroundDark : Colors.white,
@@ -142,9 +142,9 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
           _isScanning = false;
         });
 
-        final msg = result.errorMessage ?? "No matching timepiece models were detected in this image.";
+        final msg = result.errorMessage ?? "No matching timepiece models found for this image via /api/v1/search.";
         Get.snackbar(
-          "Visual Scan Notice",
+          "Image Search Notice",
           msg,
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.amber.shade800.withValues(alpha: 0.95),
@@ -175,7 +175,7 @@ class _ImageSearchScreenState extends State<ImageSearchScreen>
   Future<void> _onRecentScanSelected(Map<String, String> item) async {
     setState(() {
       _isScanning = true;
-      _scanningMessage = "Loading listings for ${item['name']}...";
+      _scanningMessage = "Searching listings via /api/v1/search for ${item['name']}...";
     });
 
     try {
