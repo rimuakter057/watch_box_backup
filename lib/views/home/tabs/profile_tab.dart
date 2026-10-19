@@ -12,7 +12,6 @@ import '../../profile/subscription_plans_screen.dart';
 import '../../profile/account_settings_screen.dart';
 import '../../profile/change_password_screen.dart';
 import '../../profile/my_listings_screen.dart';
-import '../../profile/notifications_screen.dart';
 import '../../chat/conversations_screen.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -912,12 +911,6 @@ class _ProfileTabState extends State<ProfileTab> with WidgetsBindingObserver {
                   icon: Icons.chat_bubble_outline_rounded,
                   title: "Messages & Dealer Chats",
                   onTap: () => Get.to(() => const ConversationsScreen()),
-                ),
-                _buildSettingCard(
-                  context: context,
-                  icon: Icons.notifications_none_rounded,
-                  title: "Notification Preferences",
-                  onTap: () => Get.to(() => const ActivityNotificationsScreen()),
                 ),
 
                 // 5. Dark Mode Card
