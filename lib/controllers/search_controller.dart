@@ -397,31 +397,73 @@ class WatchSearchController extends GetxController {
     }
 
     try {
-      final liveList = await _listingsApi.getMyListings(status: isSold ? 'sold' : 'active');
-      if (liveList != null && liveList.isNotEmpty) {
-        return liveList.where((w) => isSold ? w.isSold : !w.isSold).toList();
+      final List<WatchModel> result = [];
+      final Set<String> seenIds = {};
+
+      // 1. Gather all possible current user identifiers
+      final auth = Get.find<AuthController>();
+      final myBackendId = pref.activeUserBackendId.isNotEmpty
+          ? pref.activeUserBackendId
+          : (auth.currentUser.value?.backendId ?? '');
+      final myNumericId = pref.activeUserId?.toString() ?? auth.currentUser.value?.id?.toString() ?? '';
+      final myName = pref.activeUserName.isNotEmpty
+          ? pref.activeUserName
+          : (auth.currentUser.value?.name ?? '');
+
+      debugPrint("🔍 [MY LISTINGS] Loading listings: BackendId: '$myBackendId', NumericId: '$myNumericId', Name: '$myName', isSold: $isSold");
+
+      bool isOwnedByMe(WatchModel w) {
+        if (myBackendId.isNotEmpty && (w.ownerId == myBackendId || w.idString == myBackendId)) {
+          return true;
+        }
+        if (myNumericId.isNotEmpty && (w.userId?.toString() == myNumericId || w.ownerId == myNumericId)) {
+          return true;
+        }
+        if (myName.isNotEmpty && w.ownerName != null && w.ownerName!.trim().toLowerCase() == myName.trim().toLowerCase()) {
+          return true;
+        }
+        return false;
       }
 
-      // Fallback: check /listings filtering by current user's ID
-      final myId = pref.userId;
-      if (myId.isNotEmpty) {
-        final allListings = await _listingsApi.getListings(page: 1, limit: 100);
-        if (allListings != null && allListings.isNotEmpty) {
-          final filtered = allListings.where((w) {
-            final isOwner = (w.ownerId != null && w.ownerId == myId) ||
-                            (w.userId != null && w.userId.toString() == myId);
-            return isOwner && (isSold ? w.isSold : !w.isSold);
-          }).toList();
-          if (filtered.isNotEmpty) {
-            return filtered;
+      // 2. Fetch from /me/listings endpoint
+      final myListings = await _listingsApi.getMyListings(status: isSold ? 'sold' : 'active');
+      if (myListings != null && myListings.isNotEmpty) {
+        for (final w in myListings) {
+          if (isSold ? w.isSold : !w.isSold) {
+            final id = w.idString;
+            if (id.isNotEmpty) {
+              if (!seenIds.contains(id)) {
+                seenIds.add(id);
+                result.add(w);
+              }
+            } else {
+              result.add(w);
+            }
           }
         }
       }
 
-      if (liveList != null) {
-        return liveList;
+      // 3. Always also query /listings (the global collection) and include matching user items
+      // This is essential because user-created listings are stored directly in the /listings resource!
+      final allListings = await _listingsApi.getListings(page: 1, limit: 100);
+      if (allListings != null && allListings.isNotEmpty) {
+        for (final w in allListings) {
+          if (isOwnedByMe(w) && (isSold ? w.isSold : !w.isSold)) {
+            final id = w.idString;
+            if (id.isNotEmpty) {
+              if (!seenIds.contains(id)) {
+                seenIds.add(id);
+                result.add(w);
+              }
+            } else {
+              result.add(w);
+            }
+          }
+        }
       }
-      return [];
+
+      debugPrint("✅ [MY LISTINGS] Successfully resolved ${result.length} listings (isSold: $isSold)");
+      return result;
     } catch (e) {
       debugPrint("❌ [LISTINGS ERROR] Error loading user listings: $e. No fallback.");
       return [];

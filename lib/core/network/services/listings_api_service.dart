@@ -43,8 +43,8 @@ class ListingsApiService {
       }
     }
 
-    // 2. Query /me/listings with status filter
-    res = await _api.safeGet(ApiEndpoints.myListings, query: {'status': status});
+    // 2. Query /me/listings directly without status query (backend stores status on record root, not in data.status)
+    res = await _api.safeGet(ApiEndpoints.myListings);
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
       if (list != null && list.isNotEmpty) {
@@ -52,11 +52,11 @@ class ListingsApiService {
       }
     }
 
-    // 3. Fallback to /listings?status=...
-    res = await _api.safeGet(ApiEndpoints.listings, query: {'status': status});
+    // 3. Fallback to /listings
+    res = await _api.safeGet(ApiEndpoints.listings, query: {'limit': 100});
     if (res.isOk && res.body != null) {
       final list = ApiClient.extractList(res.body);
-      if (list != null) {
+      if (list != null && list.isNotEmpty) {
         return list.whereType<Map>().map((e) => WatchModel.fromMap(Map<String, dynamic>.from(e))).toList();
       }
     }

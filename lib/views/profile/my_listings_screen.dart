@@ -181,6 +181,13 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
           icon: Icon(Icons.arrow_back_rounded, color: context.primaryNav),
           onPressed: () => Get.back(),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: context.primaryNav),
+            onPressed: _loadAllListings,
+            tooltip: "Refresh Listings",
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: context.primaryNav,
@@ -217,30 +224,42 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
 
   Widget _buildActiveTab() {
     if (_activeListings.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: _loadAllListings,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 60.h),
           children: [
-            Icon(Icons.sell_outlined, size: 64.w, color: context.borderColor),
-            SizedBox(height: 16.h),
-            Text(
-              "You don't have any active listings",
-              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: context.textSecondaryColor),
-            ),
-            SizedBox(height: 8.h),
-            TextButton(
-              onPressed: _showAddListingSheet,
-              child: const Text("Create Your First Listing", style: TextStyle(color: Color(0xFFCA8A04), fontWeight: FontWeight.bold)),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.sell_outlined, size: 64.w, color: context.borderColor),
+                  SizedBox(height: 16.h),
+                  Text(
+                    "You don't have any active listings",
+                    style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: context.textSecondaryColor),
+                  ),
+                  SizedBox(height: 8.h),
+                  TextButton(
+                    onPressed: _showAddListingSheet,
+                    child: const Text("Create Your First Listing", style: TextStyle(color: Color(0xFFCA8A04), fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-      itemCount: _activeListings.length,
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: _loadAllListings,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+        itemCount: _activeListings.length,
+        itemBuilder: (context, index) {
         final watch = _activeListings[index];
         final formattedPrice = '\$${watch.price.toStringAsFixed(0).replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -320,25 +339,37 @@ class _MyListingsScreenState extends State<MyListingsScreen> with SingleTickerPr
 
   Widget _buildSoldTab() {
     if (_soldListings.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: _loadAllListings,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 60.h),
           children: [
-            Icon(Icons.inventory_2_outlined, size: 64.w, color: context.borderColor),
-            SizedBox(height: 16.h),
-            Text(
-              "No sold listings yet",
-              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: context.textSecondaryColor),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inventory_2_outlined, size: 64.w, color: context.borderColor),
+                  SizedBox(height: 16.h),
+                  Text(
+                    "No sold listings yet",
+                    style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: context.textSecondaryColor),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-      itemCount: _soldListings.length,
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: _loadAllListings,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+        itemCount: _soldListings.length,
+        itemBuilder: (context, index) {
         final watch = _soldListings[index];
         final invoice = _invoices[watch.idString];
         final hasInvoice = invoice != null;

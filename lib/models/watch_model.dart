@@ -121,7 +121,7 @@ class WatchModel {
     final String? parsedOwnerId = isSavedRecord
         ? (innerData?['ownerId'] ?? innerData?['owner_id'])?.toString()
         : (map['ownerId'] ?? map['owner_id'] ?? innerData?['ownerId'] ?? innerData?['owner_id'] ?? rawOwner?['id'] ?? rawOwner?['_id'])?.toString();
-    final String? parsedOwnerName = (rawOwner?['username'] ?? rawOwner?['name'] ?? rawOwner?['email'])?.toString();
+    final String? parsedOwnerName = (rawOwner?['displayName'] ?? rawOwner?['name'] ?? rawOwner?['username'] ?? rawOwner?['email'])?.toString();
 
     // 4. Price parsing
     double parsedPrice = 0.0;
