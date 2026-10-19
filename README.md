@@ -1,491 +1,577 @@
-# The Watch Box (WatchSphere) — Mobile Application & API Specification
+# ⌚ The Watch Box (WatchSphere)
 
-**The Watch Box** is an enterprise-grade, high-fidelity luxury watch marketplace and intelligence mobile application built with **Flutter**, **GetX**, and **SQLite**. It aggregates luxury timepieces across tier-1 global marketplaces (**Chrono24**, **eBay**, and **Grailzee**), offering real-time market value spreads, vector cubic Bezier price trend charts, visual AI watch detection, location radar dealer maps, watchlists, saved search alerts, peer-to-peer trader listing capabilities, and an administrative control suite.
+> **Enterprise-Grade Luxury Timepiece Intelligence, Multi-Marketplace Aggregation & Peer-to-Peer Trading Platform**
 
-This document serves as the master documentation for the mobile application codebase, detailing all features, controllers, local database tables, their corresponding backend REST API endpoints from `watchBox-Backend`, and clearly highlighting features that currently have **No endpoint for that**.
+[![Flutter](https://img.shields.io/badge/Flutter-3.44.0-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.12.1-0175C2?logo=dart&logoColor=white)](https://dart.dev)
+[![GetX](https://img.shields.io/badge/State-GetX_4.7.3-8A2BE2)](https://pub.dev/packages/get)
+[![SQLite](https://img.shields.io/badge/Offline--First-SQLite_2.4.3-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
+[![Socket.io](https://img.shields.io/badge/Realtime-Socket.io_3.1.6-010101?logo=socketdotio&logoColor=white)](https://socket.io)
+[![Backend](https://img.shields.io/badge/Backend-Node.js_22_Express-339933?logo=nodedotjs&logoColor=white)](file:///d:/nahid/watchBox-Backend)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248?logo=mongodb&logoColor=white)](https://mongodb.com)
+[![Postman](https://img.shields.io/badge/API_Collection-419_Endpoints-FF6C37?logo=postman&logoColor=white)](file:///d:/nahid/the_watch_box/the_watch_box/collection.json)
 
 ---
 
 ## 📑 Table of Contents
-1. [📱 System Architecture & Tech Stack](#-system-architecture--tech-stack)
-2. [📁 Project Directory Structure](#-project-directory-structure)
-3. [📬 Postman API Collection (`collection.json`)](#-postman-api-collection-collectionjson)
-4. [🗺️ Complete Feature & Backend API Mapping Matrix](#-complete-feature--backend-api-mapping-matrix)
-   - [1. Authentication & Session Management](#1-authentication--session-management)
-   - [2. User Profile, Preferences & Settings](#2-user-profile-preferences--settings)
-   - [3. Search, Discovery & Multi-Platform Aggregation](#3-search-discovery--multi-platform-aggregation)
-   - [4. Search Quota & Monthly Tier Limitations](#4-search-quota--monthly-tier-limitations)
-   - [5. Saved Searches & Search Alerts](#5-saved-searches--search-alerts)
-   - [6. Bookmarks & Watchlists](#6-bookmarks--watchlists)
-   - [7. Watch Details, Market Metrics & Outbound Redirection](#7-watch-details-market-metrics--outbound-redirection)
-   - [8. Price Trend Curves & Market Analytics](#8-price-trend-curves--market-analytics)
-   - [9. Visual Watch Image Search & AI Detection](#9-visual-watch-image-search--ai-detection)
-   - [10. Push Notifications, Price Drop & Listing Alerts](#10-push-notifications-price-drop--listing-alerts)
-   - [11. Peer-to-Peer Marketplace & Trader Listings](#11-peer-to-peer-marketplace--trader-listings)
-   - [12. In-App Purchasing, Orders & Invoicing](#12-in-app-purchasing-orders--invoicing)
-   - [13. Subscriptions, Tier Access & Stripe Billing](#13-subscriptions-tier-access--stripe-billing)
-   - [14. Organizations Radar Map & Service Centers](#14-organizations-radar-map--service-centers)
-   - [15. Social Sharing & Listing Export](#15-social-sharing--listing-export)
-   - [16. Admin Dashboard, Platform Toggles & System Diagnostics](#16-admin-dashboard-platform-toggles--system-diagnostics)
-   - [17. Automation & Social Media Campaigns](#17-automation--social-media-campaigns)
-5. [⚠️ Summary of Features with "NO ENDPOINT FOR THAT"](#-summary-of-features-with-no-endpoint-for-that)
-6. [🗄️ Local SQLite Database Architecture (`watch_sphere.db`)](#-local-sqlite-database-architecture-watch_spheredb)
-7. [🚀 Getting Started & Local Execution](#-getting-started--local-execution)
+1. [📖 Executive Summary & Core Value Proposition](#-executive-summary--core-value-proposition)
+2. [🏛️ System Architecture & Data Flow](#️-system-architecture--data-flow)
+   - [High-Level Architecture](#high-level-architecture)
+   - [Real-Time Messaging & Socket Gateway Flow](#real-time-messaging--socket-gateway-flow)
+   - [eBay OAuth 2.0 & Cross-Marketplace Sync Flow](#ebay-oauth-20--cross-marketplace-sync-flow)
+3. [✨ Key Features & Capabilities](#-key-features--capabilities)
+   - [1. Multi-Platform Watch Search & Filter Engine](#1-multi-platform-watch-search--filter-engine)
+   - [2. Gemini AI Visual Vision & Image Search](#2-gemini-ai-visual-vision--image-search)
+   - [3. eBay OAuth 2.0 & Dealer Inventory Sync](#3-ebay-oauth-20--dealer-inventory-sync)
+   - [4. Real-Time Dealer & Seller Messaging](#4-real-time-dealer--seller-messaging)
+   - [5. Vector Cubic Bezier Price Trend Analytics](#5-vector-cubic-bezier-price-trend-analytics)
+   - [6. Geolocation Radar Service Map](#6-geolocation-radar-service-map)
+   - [7. In-App Subscriptions & Tier Quota Checks](#7-in-app-subscriptions--tier-quota-checks)
+   - [8. Peer-to-Peer Trading & Invoicing](#8-peer-to-peer-trading--invoicing)
+   - [9. Real-Time Watch Price Alerts](#9-real-time-watch-price-alerts)
+   - [10. Admin Management & Feature Toggles](#10-admin-management--feature-toggles)
+4. [🌐 Network & Service Layer Architecture](#-network--service-layer-architecture)
+5. [📁 Complete Project Directory Tree](#-complete-project-directory-tree)
+6. [📬 Postman API Collection (`collection.json`)](#-postman-api-collection-collectionjson)
+7. [🗺️ Complete Feature-to-API Mapping Matrix](#️-complete-feature-to-api-mapping-matrix)
+8. [🗄️ Local SQLite Database Schema (`watch_sphere.db`)](#️-local-sqlite-database-schema-watch_spheredb)
+9. [🚀 Prerequisites & Getting Started](#-prerequisites--getting-started)
+   - [Mobile App Execution](#1-mobile-app-execution-flutter)
+   - [Backend Service Execution](#2-backend-service-execution-nodejs--docker)
+   - [Environment Variables Configuration](#3-environment-variables-configuration)
+10. [🧪 Quality Assurance & Testing](#-quality-assurance--testing)
 
 ---
 
-## 📱 System Architecture & Tech Stack
+## 📖 Executive Summary & Core Value Proposition
 
-### Frontend Mobile App (`the_watch_box`)
-- **Framework:** Flutter (`^3.44.0`), Dart (`^3.12.1`)
-- **State Management & DI:** GetX (`get`) for reactive MVC controllers, snackbars, modals, and route bindings
-- **Screen Responsiveness:** `flutter_screenutil` (Target design size: `390 x 844`)
-- **Offline / Local Persistence:** SQLite via `sqflite` (database file: `watch_sphere.db`)
-- **Client Cache & Flags:** `shared_preferences` (`PrefManager`) for dark mode, onboarding, user credentials, and admin integration toggles
-- **Custom Graphics:** Handcrafted `CustomPainter` vector engines (`CustomPriceChart` for cubic Bezier trend curves, radar rotating search sweep, watermark gear dials)
+**The Watch Box (WatchSphere)** is an enterprise-grade luxury horology ecosystem designed to bring radical transparency, valuation intelligence, and streamlined trading to the luxury watch marketplace.
 
-### Backend API & Workers (`watchBox-Backend`)
-- **Runtime:** Node.js (`>=22.11.0`), TypeScript, Express (`^4.21.2`)
-- **Database:** MongoDB & Mongoose (`^8.9.5`), Redis (`ioredis ^5.4.2`), RabbitMQ (`amqplib ^0.10.5`)
-- **Authentication:** JWT Bearer tokens (Customer & Admin), Argon2 password hashing
-- **Storage & Ingestion:** AWS S3 SDK for presigned image uploads, Sharp for image processing
+### The Problem It Solves
+- **Fragmented Liquidity Data:** Luxury watch prices fluctuate significantly across Chrono24, eBay, and private dealers. Buyers and sellers have no single source of truth for fair market value.
+- **Counterfeit & Reference Ambiguity:** Identifying exact reference numbers, bezel variants, dial materials, and hands requires expert knowledge.
+- **Tedious Multi-Channel Selling:** Professional dealers waste hours cross-posting the same inventory between private trader networks and major global marketplaces.
+- **Unstructured Communication:** Dealer-to-buyer transactions often occur over unencrypted, disorganized messaging apps with no paper trail or invoice integration.
+
+### The Watch Box Solution
+The Watch Box unifies all facets of luxury watch ownership and dealership into a unified Flutter mobile application backed by a distributed Node.js/MongoDB infrastructure:
+1. **Aggregates live inventory** from **eBay**, **Chrono24**, and internal trader collections in real time.
+2. **Identifies watches visually** via camera shutter using **Gemini AI Vision** and vector embeddings.
+3. **Synchronizes dealer listings directly with eBay** via an integrated OAuth 2.0 gateway.
+4. **Provides direct in-app peer communication** between dealers and collectors through a dedicated Socket.io gateway with automatic REST fallback.
+5. **Draws dynamic vector price trends** using custom cubic Bezier curves and calculated 90-day moving average spreads.
+6. **Maintains offline-first resilience** via SQLite, allowing users to browse saved inventory, searches, and cached listings without connectivity.
 
 ---
 
-## 📁 Project Directory Structure
+## 🏛️ System Architecture & Data Flow
+
+### High-Level Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client["Flutter Mobile Client (iOS / Android / Web)"]
+        UI["UI Layer\n(GetX Views & Screens)"]
+        Controllers["Controllers Layer\n(AuthController, SearchController, ChatController, etc.)"]
+        Services["Domain API Services\n(AuthApi, SearchApi, ChatApi, EbayApi, VisualSearchApi)"]
+        Network["Network Client & Socket\n(ApiClient with JWT Auto-Refresh + SocketService)"]
+        LocalDB[("Local SQLite Database\n(watch_sphere.db)")]
+        Prefs["Local Shared Preferences\n(PrefManager)"]
+
+        UI --> Controllers
+        Controllers --> Services
+        Controllers --> LocalDB
+        Controllers --> Prefs
+        Services --> Network
+        Network <--> Prefs
+    end
+
+    subgraph Backend["WatchBox Backend Microservices"]
+        Gateway["Express API Gateway & Router\n(http://localhost:4000 or https://api.mywatchbox.net)"]
+        AuthMiddleware["Auth & RBAC Middleware\n(Customer & Admin JWT Verification)"]
+        RealtimeGW["Socket.io Gateway\n(Realtime Messaging & Broadcasts)"]
+        
+        MongoDB[("MongoDB Database\n(Users, Listings, Orders, Messages)")]
+        RedisCache[("Redis 7 Cache\n(Session Store, Search Cache, Rate Limits)")]
+        RabbitMQ[("RabbitMQ Broker\n(Async Jobs, Price Scrapers, Email Queue)")]
+
+        Gateway --> AuthMiddleware
+        AuthMiddleware --> MongoDB
+        Gateway --> RedisCache
+        Gateway --> RabbitMQ
+        RealtimeGW <--> RedisCache
+    end
+
+    subgraph External["External Services & Marketplaces"]
+        eBayAPI["eBay Browse & Inventory APIs\n(OAuth 2.0 & Listing Sync)"]
+        Chrono24["Chrono24 Marketplace\n(Scraper & Price Index)"]
+        StripeAPI["Stripe API\n(Checkout Sessions & Escrow)"]
+        GeminiAI["Gemini AI Vision API\n(Dial & Spec Detection)"]
+    end
+
+    Network -- "REST (JSON / Multipart)" --> Gateway
+    Network -- "WebSocket (WSS)" --> RealtimeGW
+    Gateway --> eBayAPI
+    Gateway --> Chrono24
+    Gateway --> StripeAPI
+    Gateway --> GeminiAI
+```
+
+---
+
+### Real-Time Messaging & Socket Gateway Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dealer as Dealer (User A)
+    participant AppA as Mobile App A
+    participant SocketGW as Socket.io Gateway
+    participant Backend as Express REST API
+    participant DB as MongoDB
+    participant AppB as Mobile App B
+    actor Buyer as Buyer (User B)
+
+    Dealer->>AppA: Open Chat Screen & Type Message
+    AppA->>SocketGW: emit('typing', { chatId, isTyping: true })
+    SocketGW-->>AppB: on('user_typing', { isTyping: true })
+    AppB-->>Buyer: Show "Dealer is typing..." indicator
+
+    Dealer->>AppA: Click "Send"
+    alt WebSocket Connected
+        AppA->>SocketGW: emit('send_message', { chatId, content, listingId })
+        SocketGW->>DB: Persist Message Record
+        SocketGW-->>AppB: on('new_message', MessageModel)
+        SocketGW-->>AppA: emit('message_sent', { status: 'delivered', id })
+    else WebSocket Disconnected / Failed
+        AppA->>Backend: POST /api/v1/chat/messages (REST Fallback)
+        Backend->>DB: Save Message
+        Backend-->>AppA: 201 Created (MessageModel)
+    end
+    AppB-->>Buyer: Play incoming message chime & update unread badge
+```
+
+---
+
+### eBay OAuth 2.0 & Cross-Marketplace Sync Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Collector / Dealer
+    participant App as Mobile App
+    participant Backend as Backend Gateway
+    participant eBay as eBay OAuth & Inventory API
+
+    User->>App: Tap "Connect eBay" in Profile Tab
+    App->>Backend: GET /api/v1/ebay/connect?response=json
+    Backend-->>App: { authorizationUrl: "https://auth.ebay.com/oauth2/authorize?..." }
+    App->>eBay: Launch In-App Browser / Custom Tab
+    User->>eBay: Review Scopes & Click "Agree & Continue"
+    eBay->>Backend: Redirect GET /api/v1/ebay/oauth/callback?code=AUTH_CODE
+    Backend->>eBay: POST /identity/v1/oauth2/token (Exchange Code)
+    eBay-->>Backend: Return { access_token, refresh_token, ebay_username }
+    Backend->>Backend: Store Encrypted Token in MongoDB
+    Backend-->>App: Deep-link redirect: watchbox://oauth/ebay?status=success
+    App->>Backend: GET /api/v1/ebay/status
+    Backend-->>App: { connected: true, ebayUsername: "luxury_dealer_nyc" }
+    App-->>User: Display Green "Connected (luxury_dealer_nyc)" Badge
+
+    opt Publish Listing to eBay
+        User->>App: Tap "Sync to eBay" on Watch Detail Screen
+        App->>Backend: POST /api/v1/dealer/listings/:listingId/publish-to-ebay
+        Backend->>eBay: Create Inventory Item & Offer (eBay Merchant API)
+        Backend-->>App: { success: true, ebayListingId: "1234567890" }
+        App-->>User: Show Success Notification with eBay Live Link
+    end
+```
+
+---
+
+## ✨ Key Features & Capabilities
+
+### 1. Multi-Platform Watch Search & Filter Engine
+- **Aggregated Queries:** Search simultaneously across Chrono24, eBay, and internal in-app listings.
+- **Deep Filtering:** Filter by brand (Rolex, Omega, Patek Philippe, Audemars Piguet, Cartier, etc.), model, condition (Unworn, Excellent, Good, Fair), manufacturing year range, location radius, and price brackets.
+- **Autocompletion & Facets:** Instant predictive search suggestions and facet counters display matching inventory counts before applying filters.
+- **Free Tier Quota (5 Searches/mo):** Automatic client-side tracking and server-side verification (`/subscriptions/me/usage`) with an intuitive upgrade prompt when exhausted.
+
+### 2. Gemini AI Visual Vision & Image Search
+- **Dial & Component Detection:** Captures watch photos via camera or gallery and transmits them to Gemini AI Vision to detect brand, model, dial color, bezel material, and reference number.
+- **Vector Feature Embeddings:** Visual search converts images into embeddings to find closest matches across external marketplaces.
+- **Listing Auto-Fill:** Dealers taking watch photos have the title, brand, and specifications automatically populated when creating a new listing.
+
+### 3. eBay OAuth 2.0 & Dealer Inventory Sync
+- **Seamless OAuth Flow:** Users authorize The Watch Box to manage their eBay inventory through official eBay User Consent protocols.
+- **Real-Time Status Monitoring:** Profile tab displays connection state, linked eBay username, and token renewal indicators.
+- **One-Tap Listing Push:** Dealers can push any in-app peer listing to eBay as an active marketplace listing (`/dealer/listings/:listingId/publish-to-ebay`).
+
+### 4. Real-Time Dealer & Seller Messaging
+- **Dedicated Listings Menu Navigation:** Users can access their conversations directly from the listings tab header icon.
+- **Full Chat Experience:** Real-time messages, typing indicators, read receipts, and listing attachment cards showing the watch photo, title, and asking price.
+- **Socket.io with REST Fallback:** When WebSockets are unavailable due to restrictive firewalls or sleeping background state, communications gracefully degrade to standard REST endpoints.
+
+### 5. Vector Cubic Bezier Price Trend Analytics
+- **Handcrafted Vector Painter:** Custom Flutter `CustomPainter` rendering smooth cubic Bezier trendlines with gradient fills, grid lines, and interactive price highlight tooltips.
+- **Valuation Metrics:** Displays 90-day moving averages, historical lowest/highest sold prices, and liquidity/volatility scores.
+
+### 6. Geolocation Radar Service Map
+- **Animated Radar Sweep:** Dynamic rotating sweep radar drawing nearby certified luxury watch service centers, watchmakers, and authorized retail boutiques.
+- **Detailed Service Center Cards:** Tap pins to view workshop rating, address, distance (miles/km), and direct phone/directions action buttons.
+
+### 7. In-App Subscriptions & Tier Quota Checks
+- **Tiers:** Free Tier (5 searches/month), Premium Tier ($29/month - unlimited searches, price alerts, AI vision), VIP Dealer Tier (unlimited listings, direct eBay push, priority placement).
+- **Stripe Integration:** Seamless checkout session creation and customer billing portal redirection.
+
+### 8. Peer-to-Peer Trading & Invoicing
+- **User Listings:** Create watch listings with high-resolution multi-photo galleries (`/listings/:id/images`).
+- **Escrow Buy Now Intent:** Buyers can initiate formal purchase offers with Stripe PaymentIntent escrow holding funds until verification.
+- **PDF Invoice Generation:** Instant standard luxury watch invoice generation with buyer/seller details, serial number, and pricing breakdown.
+
+### 9. Real-Time Watch Price Alerts
+- **Custom Alert Triggers:** Set triggers for specific watch models when price drops below a target amount.
+- **Background Scanner:** Automated worker scans marketplace feeds and pushes notifications via Firebase Cloud Messaging (FCM) and in-app alert badges.
+
+### 10. Admin Management & Feature Toggles
+- **Admin Dashboard:** High-level overview of active users, search metrics, monthly recurring revenue, and hardware latency.
+- **Dynamic Feature Toggles:** Enable or disable eBay scraping, Chrono24 ingestion, AI image search, and ads on the fly without redeploying code.
+- **Staff RBAC:** Role-based access control for superadmins, moderators, and financial auditors.
+
+---
+
+## 🌐 Network & Service Layer Architecture
+
+The Flutter application relies on a clean, decoupled network architecture built on top of **GetConnect**:
+
+```
+lib/core/network/
+├── api_client.dart           # Master HTTP client with automatic JWT injection & refresh
+├── api_endpoints.dart        # Type-safe constants for all 419 backend endpoints
+├── socket_service.dart       # Socket.io client for real-time chat, typing, and alerts
+└── services/
+    ├── auth_api_service.dart            # Login, register, token refresh, password recovery
+    ├── search_api_service.dart          # Multi-platform search, facets, history
+    ├── visual_search_api_service.dart   # Camera upload, Gemini AI vision analysis
+    ├── listings_api_service.dart        # Peer listings, photo gallery upload, status
+    ├── recommendations_api_service.dart # Personalized AI watch recommendations
+    ├── alerts_api_service.dart          # Price drop alerts, trigger execution, notifications
+    ├── subscriptions_api_service.dart   # Stripe checkout, plan status, quota check
+    ├── chat_api_service.dart            # REST conversation list, messages, mark-as-read
+    └── ebay_api_service.dart            # eBay OAuth connect URL, status, publish listing
+```
+
+### Automatic Token Refresh Lifecycle
+1. `ApiClient` intercepts outgoing requests and adds `Authorization: Bearer <accessToken>`.
+2. When the backend returns a `401 Unauthorized`, `ApiClient` automatically pauses pending requests.
+3. It dispatches a refresh request using `refreshToken` to `POST /api/v1/auth/refresh`.
+4. Upon receiving the new token, it updates `PrefManager`, updates the header, and transparently replays the failed request without logging out the user.
+
+---
+
+## 📁 Complete Project Directory Tree
 
 ```
 lib/
-├── main.dart                               # Application bootstrap, DI bindings & route table
+├── main.dart                               # App entry point, service locator bindings & routes
 ├── core/
 │   ├── db/
-│   │   └── db_helper.dart                  # SQLite openDatabase helper, migrations, and seed dataset
+│   │   └── db_helper.dart                  # SQLite helper, migrations, schema & seed data
+│   ├── network/
+│   │   ├── api_client.dart                 # Base HTTP client with JWT interceptor & auto-refresh
+│   │   ├── api_endpoints.dart              # REST endpoints inventory & path builders
+│   │   ├── socket_service.dart             # Socket.io client with REST fallback
+│   │   └── services/                       # 9 specialized domain network services
 │   ├── prefs/
-│   │   └── pref_manager.dart               # SharedPreferences wrapper for session flags & platform toggles
+│   │   └── pref_manager.dart               # SharedPreferences wrapper for tokens & settings
 │   └── theme/
-│       ├── app_colors.dart                 # Hex color palette (Navy Blue, Dial Accents, Gold, Slates)
-│       └── app_theme.dart                  # Dark & Light ThemeData definitions
+│       ├── app_colors.dart                 # Luxury navy, dial blue, gold, and slate palette
+│       └── app_theme.dart                  # High-contrast Dark & Light ThemeData definitions
 ├── models/
-│   ├── alert_model.dart                    # Price drop and new listing notifications
-│   ├── bookmark_model.dart                 # Saved listing references
-│   ├── org_marker_model.dart               # Radar service center & dealer coordinates
-│   ├── search_query_model.dart             # Bookmarked queries with JSON filters
-│   ├── user_model.dart                     # User entity (role: user/admin, plan: free/paid)
-│   └── watch_model.dart                    # Watch listing entity (eBay, Chrono24, Grailzee, In-App)
+│   ├── alert_model.dart                    # Notification & price drop alert entity
+│   ├── bookmark_model.dart                 # Saved listing bookmark reference
+│   ├── conversation_model.dart             # Chat thread header with last message & unread count
+│   ├── message_model.dart                  # Individual chat message with sender, time & media
+│   ├── org_marker_model.dart               # Service center & dealer map marker coordinates
+│   ├── search_query_model.dart             # Bookmarked search queries & JSON filter filters
+│   ├── user_model.dart                     # User profile entity with role, plan & avatar
+│   └── watch_model.dart                    # Canonical watch listing entity
 ├── controllers/
-│   ├── admin_controller.dart               # Admin dashboard, integrations toggle, billing editor
-│   ├── alert_controller.dart               # Notifications feed, unread counters, mark-read
-│   ├── auth_controller.dart                # User auth, session manager, plan upgrade/downgrade
-│   ├── bookmark_controller.dart             # Bookmarks toggle and saved searches
-│   ├── map_controller.dart                  # Radar map markers and selected provider
-│   ├── onboarding_controller.dart          # 3-step carousel controller
-│   └── search_controller.dart               # Multi-platform search, filter logic, limit check, P2P transactions
+│   ├── admin_controller.dart               # Admin metrics, user status & feature toggles
+│   ├── alert_controller.dart               # Notifications feed, unread counters & push events
+│   ├── auth_controller.dart                # User authentication, profile session & plan state
+│   ├── bookmark_controller.dart            # Saved listings & saved search queries
+│   ├── chat_controller.dart                # Real-time conversations, messaging & typing status
+│   ├── map_controller.dart                 # Radar map markers, location radius & selection
+│   ├── onboarding_controller.dart          # 3-step feature onboarding carousel
+│   └── search_controller.dart              # Multi-marketplace search, filters & quota check
 └── views/
-    ├── splash/splash_screen.dart            # Rotating watermark gear dials & loading bar
-    ├── onboarding/onboarding_screen.dart    # 3-step feature onboarding pager
-    ├── auth/login_screen.dart               # Fast mockup profile switcher & passwordless login
+    ├── splash/splash_screen.dart           # Rotating watermark gear dials & loading bar
+    ├── onboarding/onboarding_screen.dart   # Interactive 3-step feature introduction
+    ├── auth/
+    │   ├── login_screen.dart               # Login with developer mockup profile switcher
+    │   └── sign_up_screen.dart             # Registration with direct avatar image upload
     ├── home/
-    │   ├── home_screen.dart                 # MainContainerScreen with bottom navigation bar
-    │   ├── watch_detail_screen.dart         # Hero view, price trend curve, specs, outbound & buy sheet
-    │   ├── traders_collections_screen.dart  # In-app peer-to-peer watch listings
+    │   ├── home_screen.dart                # Main container with 5-tab floating navigation bar
+    │   ├── watch_detail_screen.dart        # Hero view, vector price curve, specs & buy sheet
+    │   ├── traders_collections_screen.dart # Peer-to-peer watch marketplace
     │   └── tabs/
-    │       ├── home_tab.dart                # Home dashboard, indices, trending listings
-    │       ├── search_tab.dart              # Multi-platform search grid & filter drawer
-    │       ├── bookmarks_tab.dart           # Bookmarked listings & saved searches tabs
-    │       ├── alerts_tab.dart              # Notifications feed (price drops & new listings)
-    │       ├── map_tab.dart                 # Animated radar map with service center pins
-    │       └── profile_tab.dart             # Profile stats, plan gauge, settings & theme toggle
+    │       ├── home_tab.dart               # Dashboard with market indices & trending watches
+    │       ├── search_tab.dart             # Search grid with filter drawer & platform chips
+    │       ├── listings_tab.dart           # In-app market, my listings & dealer chat access
+    │       ├── alerts_tab.dart             # Price drops, new listing alerts & event history
+    │       ├── map_tab.dart                # Animated radar map with service center pins
+    │       └── profile_tab.dart            # Profile stats, eBay connection badge, settings
+    ├── chat/
+    │   ├── conversations_screen.dart       # List of dealer & seller message threads
+    │   └── chat_screen.dart                # Real-time message thread with watch listing card
     ├── profile/
-    │   ├── account_settings_screen.dart     # Account details and settings
-    │   ├── change_password_screen.dart      # Password modification form
-    │   ├── invoice_preview_screen.dart      # Standard luxury billing invoice preview & PDF export
-    │   ├── my_listings_screen.dart          # User's active & sold listings with invoice creation
-    │   ├── notifications_screen.dart        # Expanded notification center
-    │   └── subscription_plans_screen.dart   # Plan comparison (Free vs Paid vs VIP)
-    ├── search/image_search_screen.dart      # Camera / visual similarity watch search
-    ├── admin/admin_dashboard.dart           # Admin metrics, user manager, toggles, hardware latency
+    │   ├── account_settings_screen.dart    # Profile detail editor & session revocation
+    │   ├── change_password_screen.dart     # Password modification view
+    │   ├── invoice_preview_screen.dart     # PDF luxury invoice preview & download
+    │   ├── my_listings_screen.dart         # Active & sold trader listings management
+    │   ├── notifications_screen.dart       # Expanded notification preferences
+    │   └── subscription_plans_screen.dart  # Free vs Premium vs VIP plan tier selector
+    ├── search/image_search_screen.dart     # Camera shutter AI visual search
+    ├── admin/admin_dashboard.dart          # Admin control center & marketplace toggles
     └── widgets/
-        ├── custom_chart.dart                # Vector Cubic Bezier PriceTrendChart painter
-        ├── watch_background.dart            # Radial luxury gradient background
-        └── navbar/custom_navbar.dart        # Floating navy navigation bar with badge dots
+        ├── custom_chart.dart               # CustomPainter cubic Bezier PriceTrendChart
+        ├── create_listing_sheet.dart       # Bottom sheet for creating watch listings
+        ├── watch_background.dart           # Luxury radial gradient background scaffold
+        └── navbar/custom_navbar.dart       # Floating navy navigation bar with badge dots
 ```
 
 ---
 
 ## 📬 Postman API Collection (`collection.json`)
 
-A complete, fully documented, pre-configured **Postman Collection (v2.1.0)** is included in the root directory:
+A complete, fully verified **Postman Collection (v2.1.0)** is included in the project root:
 👉 [`collection.json`](file:///d:/nahid/the_watch_box/the_watch_box/collection.json)
 
-### Collection Structure:
-1. `01. Authentication & Sessions` (12 endpoints)
-2. `02. User Profile & Preferences` (12 endpoints)
-3. `03. Search & Discovery` (7 endpoints)
-4. `04. Image Search & AI Detection` (8 endpoints)
-5. `05. Watch Details & Catalog` (17 endpoints)
-6. `06. Price Trend & Market Analytics` (33 endpoints)
-7. `07. Bookmarks & Watchlists` (11 endpoints)
-8. `08. Saved Searches & Search Alerts` (9 endpoints)
-9. `09. Notifications & Price Drop Alerts` (12 endpoints)
-10. `10. Peer-to-Peer Marketplace & Trader Listings` (37 endpoints)
-11. `11. In-App Orders & Transactions` (12 endpoints)
-12. `12. Subscriptions & Quota (5 Searches/mo Check)` (10 endpoints)
-13. `13. Support, Content & Reports` (13 endpoints)
-14. `14. Admin Panel & Controls` (157 endpoints)
-15. `15. Platform Webhooks` (4 endpoints)
+### Collection Overview:
+- **Total Requests:** **419 endpoints**
+- **Categorized Modules:** **17 Top-Level Folders, 33 Subfolders**
+- **Authentication:** Auto-configured `Bearer {{accessToken}}` or `Bearer {{adminToken}}` with public route exceptions.
 
-### Configured Environment Variables:
-| Variable | Default Value | Description |
-| :--- | :--- | :--- |
-| `baseUrl` | `http://localhost:4000` | Target backend host and port |
-| `accessToken` | `""` | Customer JWT Bearer access token |
-| `refreshToken` | `""` | Refresh token for session renewal |
-| `adminToken` | `""` | Administrator JWT Bearer token |
-| `listingId` | `64f000000000000000000001` | Sample MongoDB Listing ObjectId |
-| `watchModelId` | `64f000000000000000000002` | Sample Watch Model ObjectId |
-| `savedSearchId` | `64f000000000000000000003` | Sample Saved Search ObjectId |
-| `watchlistId` | `64f000000000000000000004` | Sample Watchlist ObjectId |
-| `orderId` | `64f000000000000000000006` | Sample Purchase Order ObjectId |
+### Module Breakdown:
+| Folder | Category | Requests | Key Features |
+| :---: | :--- | :---: | :--- |
+| **01** | `Authentication & Sessions` | 12 | Customer login, registration, refresh token, password reset, active sessions |
+| **02** | `User Profile & Preferences` | 15 | Profile details, multipart avatar upload, dark mode, currency, nearby users |
+| **03** | `Search & Discovery` | 7 | Multi-platform aggregated search, suggestions, trending keywords, facets |
+| **04** | `Image Search & AI Detection` | 14 | Gemini AI dial analysis, vector embedding search, direct eBay/Chrono24 image search |
+| **05** | `Watch Details & Catalog` | 17 | Brands, reference models, specifications, price history, affiliate outbound links |
+| **06** | `Price Trend & Market Analytics` | 33 | 90-day price trends, liquidity scores, volatility index, portfolio value tracking |
+| **07** | `Bookmarks & Watchlists` | 14 | Saved watches, custom watchlists, personalized AI watch recommendations |
+| **08** | `Saved Searches & Search Alerts` | 14 | Saved queries, background watch price alerts, instant match trigger scan |
+| **09** | `Notifications & Price Drop Alerts` | 12 | Notification feeds, unread badge counter, SSE stream, push token registration |
+| **10** | `Peer-to-Peer Marketplace & Trader Listings` | 39 | Trader collections, active/sold listings, multi-photo gallery uploads |
+| **11** | `In-App Orders & Transactions` | 17 | Purchase orders, escrow payment intents, payment confirmation, reviews |
+| **12** | `Subscriptions & Quota (5 Searches/mo Check)` | 14 | Free quota verification, Stripe checkout session, customer billing portal |
+| **13** | `Support, Content & Reports` | 13 | Support tickets, messaging, suspicious listing reports, privacy policy & terms |
+| **14** | `Admin Panel & Controls` | 164 | Admin auth, user management, staff RBAC, promotions, earnings, marketplace toggles |
+| **15** | `Platform Webhooks` | 5 | Stripe payments, eBay account deletion challenge (`GET/POST /webhooks/ebay`), push |
+| **16** | `eBay & External Marketplaces` | 23 | eBay OAuth connect URL, connection status, dealer sync, Chrono24 price indices |
+| **17** | `System Health & Gateway` | 6 | Kubernetes liveness/readiness probes, Mongo/Redis/RabbitMQ health checks |
 
 ---
 
-## 🗺️ Complete Feature & Backend API Mapping Matrix
+## 🗺️ Complete Feature-to-API Mapping Matrix
 
-Below is the exhaustive mapping between **every function and feature in the mobile application** and the corresponding **Backend API endpoint** in `watchBox-Backend`. Features that are currently executed client-side or lack a backend implementation are explicitly labeled with **No endpoint for that**.
-
----
-
-### 1. Authentication & Session Management
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
+| App Feature / Screen | Mobile Implementation (`lib/`) | Backend REST API Endpoint | Auth Type | Status & Implementation Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **Customer Registration** | `AuthController.login()` / Registration | `POST /api/v1/auth/register` | Public | **Connected Endpoint**. Creates user account with email, password, and displayName. |
-| **Customer Login** | `AuthController.login()` (`auth_controller.dart`) | `POST /api/v1/auth/login` | Public | **Connected Endpoint**. Returns JWT `accessToken`, `refreshToken`, and user object. |
-| **Refresh Access Token** | `AuthController._loadUserSession()` | `POST /api/v1/auth/refresh` | Public | **Connected Endpoint**. Uses `refreshToken` to issue fresh `accessToken`. |
-| **Logout Active Session** | `AuthController.logout()` (`auth_controller.dart`) | `POST /api/v1/auth/logout` | Customer Bearer | **Connected Endpoint**. Blacklists current session token on the server. |
-| **Logout All Devices** | `AccountSettingsScreen` | `POST /api/v1/auth/logout-all` | Customer Bearer | **Connected Endpoint**. Revokes all active sessions for this account. |
-| **Forgot Password Request** | `LoginScreen` (Forgot password link) | `POST /api/v1/auth/forgot-password` | Public | **Connected Endpoint**. Triggers verification reset email. |
-| **Reset Password with Token** | Password reset view | `POST /api/v1/auth/reset-password` | Public | **Connected Endpoint**. Validates reset token and sets new password. |
-| **Change Password** | `ChangePasswordScreen` (`change_password_screen.dart`) | `POST /api/v1/auth/change-password` | Customer Bearer | **Connected Endpoint**. Requires `currentPassword` and `newPassword`. |
-| **List Active Sessions** | `AccountSettingsScreen` (Connected Devices) | `GET /api/v1/auth/sessions` | Customer Bearer | **Connected Endpoint**. Returns list of active sessions with IP and user-agent. |
-| **Revoke Specific Session** | `AccountSettingsScreen` (Terminate Device) | `DELETE /api/v1/auth/sessions/:sessionId` | Customer Bearer | **Connected Endpoint**. Revokes single session by ID. |
-| **Developer Test Bypass Login** | `LoginScreen.dart` (`_submit()`) | **No endpoint for that** | Local Client | **No endpoint for that**. Fast developer bypass enabling instant login by typing any name and selecting Free/Paid role. Stored directly in local SQLite `users` table. |
+| **Customer Registration** | `AuthController.register()` / `sign_up_screen.dart` | `POST /api/v1/auth/register` | Public | **Connected**. Registers user with email, password, name, phone & country. |
+| **Direct Avatar Upload** | `AuthController.uploadAvatar()` / `ProfileTab` | `POST /api/v1/users/me/avatar` | Customer Bearer | **Connected**. Multipart/form-data direct image upload to storage. |
+| **Customer Login** | `AuthController.login()` / `login_screen.dart` | `POST /api/v1/auth/login` | Public | **Connected**. Returns JWT access token, refresh token, and account object. |
+| **Refresh Token** | `ApiClient` automatic 401 interceptor | `POST /api/v1/auth/refresh` | Public | **Connected**. Exchanges refresh token for fresh JWT access token. |
+| **Multi-Platform Search** | `WatchSearchController.executeSearch()` | `GET /api/v1/search` | Customer Bearer | **Connected**. Aggregates eBay, Chrono24, and internal peer listings. |
+| **AI Vision Detection** | `VisualSearchApiService.analyzeImage()` | `POST /api/v1/ai/analyze-image` | Customer Bearer | **Connected**. Gemini AI dial, bezel, and reference detection. |
+| **AI Visual Search** | `VisualSearchApiService.createSearch()` | `POST /api/v1/ai/search` | Customer Bearer | **Connected**. Multimodal visual vector matching across platforms. |
+| **eBay OAuth Connect URL** | `EbayApiService.getConnectUrl()` / `ProfileTab` | `GET /api/v1/ebay/connect?response=json` | Customer Bearer | **Connected**. Returns eBay User Consent authorization URL. |
+| **eBay Connection Status** | `EbayApiService.getStatus()` / `ProfileTab` | `GET /api/v1/ebay/status` | Customer Bearer | **Connected**. Returns connected state, linked username, and expiration. |
+| **Disconnect eBay** | `EbayApiService.disconnect()` / `ProfileTab` | `POST /api/v1/ebay/disconnect` | Customer Bearer | **Connected**. Revokes stored credentials and terminates eBay link. |
+| **Publish to eBay** | `EbayApiService.publishListing()` | `POST /api/v1/dealer/listings/:id/publish-to-ebay` | Customer Bearer | **Connected**. Pushes in-app watch listing directly to eBay inventory. |
+| **Dealer Conversations List**| `ChatApiService.getConversations()` / `conversations_screen.dart`| `GET /api/v1/chat/conversations` | Customer Bearer | **Connected**. Returns list of active chat threads with latest messages. |
+| **Fetch Chat Messages** | `ChatApiService.getMessages()` / `chat_screen.dart` | `GET /api/v1/chat/:chatId/messages` | Customer Bearer | **Connected**. Returns paginated message history for a conversation. |
+| **Send Chat Message** | `SocketService.sendMessage()` (fallback: `ChatApiService`)| `POST /api/v1/chat/:chatId/messages` | Customer Bearer | **Connected**. Transmits chat message via WebSocket (or REST fallback). |
+| **Price Trend Curve** | `CustomPriceChart` / `watch_detail_screen.dart` | `GET /api/v1/analytics/watch-models/:id/price-trend` | Customer Bearer | **Connected**. Historical valuation data for vector Bezier rendering. |
+| **Watch Market Summary** | `WatchDetailScreen` (Spread badge) | `GET /api/v1/watch-models/:id/market-summary` | Customer Bearer | **Connected**. Returns lowest, highest, and 90-day average market prices. |
+| **Create Watch Price Alert**| `AlertsApiService.createAlert()` / `BookmarksTab` | `POST /api/v1/watch-alerts` | Customer Bearer | **Connected**. Configures background price drop notification trigger. |
+| **Run Alert Scan** | `AlertsApiService.runScan()` | `POST /api/v1/watch-alerts/run` | Customer Bearer | **Connected**. Triggers instant scan of inventory for price alert matches. |
+| **Check Monthly Quota** | `SubscriptionsApiService.getUsage()` | `GET /api/v1/subscriptions/me/usage` | Customer Bearer | **Connected**. Verifies 5 searches/month consumption for Free users. |
+| **Stripe Checkout** | `SubscriptionsApiService.createCheckout()` | `POST /api/v1/subscription/checkout` | Customer Bearer | **Connected**. Generates Stripe Checkout Session for plan upgrades. |
+| **Billing Portal** | `SubscriptionsApiService.createPortal()` | `POST /api/v1/subscription/portal` | Customer Bearer | **Connected**. Opens Stripe customer portal for card & invoice management. |
+| **Listing Photos Upload** | `ListingsApiService.uploadImages()` | `POST /api/v1/listings/:id/images` | Customer Bearer | **Connected**. Multipart upload of high-resolution watch photographs. |
+| **Buy Now Payment Intent** | `ListingsApiService.createPaymentIntent()` | `POST /api/v1/payments/products/:id/payment-intent` | Customer Bearer | **Connected**. Creates Stripe PaymentIntent for instant escrow purchase. |
 
 ---
 
-### 2. User Profile, Preferences & Settings
+## 🗄️ Local SQLite Database Schema (`watch_sphere.db`)
 
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Get Current User Profile** | `AuthController._loadUserSession()` | `GET /api/v1/users/me` | Customer Bearer | **Connected Endpoint**. Returns user profile, active tier, and verification status. |
-| **Update Profile Info** | `AccountSettingsScreen` (`account_settings_screen.dart`) | `PATCH /api/v1/users/me` | Customer Bearer | **Connected Endpoint**. Updates `displayName`, `phone`, `country`, and contact info. |
-| **Delete Account** | `AccountSettingsScreen` (Delete Account) | `DELETE /api/v1/users/me` | Customer Bearer | **Connected Endpoint**. Soft deletes account and removes active tokens. |
-| **Get Dark Mode Preference** | `AppTheme` / `PrefManager.isDarkMode` | `GET /api/v1/users/me/dark-mode` | Customer Bearer | **Connected Endpoint**. Fetches user dark mode preference from server. |
-| **Update Dark Mode Preference** | `ProfileTab` (Theme toggle switch) | `PATCH /api/v1/users/me/dark-mode` | Customer Bearer | **Connected Endpoint**. Syncs dark mode preference to cloud database. |
-| **Get Regional Preferences** | `ProfileTab` (Currency selection) | `GET /api/v1/users/me/preferences` | Customer Bearer | **Connected Endpoint**. Returns preferred currency (USD, EUR, GBP). |
-| **Update Regional Preferences**| `ProfileTab` (Currency picker) | `PATCH /api/v1/users/me/preferences` | Customer Bearer | **Connected Endpoint**. Updates default display currency on backend. |
-| **Avatar Presigned S3 URL** | `ProfileTab` (Avatar tap) | `POST /api/v1/users/me/avatar/upload-url` | Customer Bearer | **Connected Endpoint**. Generates S3 presigned PUT URL for profile picture. |
-| **Confirm Avatar Upload** | `ProfileTab` (Avatar upload listener) | `POST /api/v1/users/me/avatar/confirm` | Customer Bearer | **Connected Endpoint**. Confirms S3 image key and updates profile picture. |
-| **Delete Avatar Image** | `ProfileTab` (Remove photo) | `DELETE /api/v1/users/me/avatar` | Customer Bearer | **Connected Endpoint**. Resets avatar to default initials placeholder. |
+The mobile client maintains a fully independent local SQLite database for offline caching and demo simulation:
 
----
+```sql
+-- 1. Users Table
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  role TEXT DEFAULT 'user',
+  plan TEXT DEFAULT 'free',
+  status TEXT DEFAULT 'active'
+);
 
-### 3. Search, Discovery & Multi-Platform Aggregation
+-- 2. Listings Table
+CREATE TABLE listings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  title TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  model TEXT NOT NULL,
+  price REAL NOT NULL,
+  platform TEXT NOT NULL,
+  year INTEGER,
+  condition TEXT,
+  location TEXT,
+  is_sold INTEGER DEFAULT 0,
+  timestamp TEXT
+);
 
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Multi-Platform Search** | `WatchSearchController.executeSearch()` (`search_tab.dart`) | `GET /api/v1/search` | Customer Bearer | **Connected Endpoint**. Aggregates eBay, Chrono24, and Grailzee listings with query, price min/max, platform chips, year, condition, location, and status. |
-| **Search Autocomplete** | `SearchTab` (Search input listener) | `GET /api/v1/search/suggestions` | Customer Bearer | **Connected Endpoint**. Returns predictive suggestions for watch brands and models. |
-| **Popular / Trending Searches**| `SearchTab` (Trending keyword pills) | `GET /api/v1/search/popular` | Customer Bearer | **Connected Endpoint**. Returns top queried watch models across platforms. |
-| **Search Filter Facets** | `SearchTab` (Filter drawer counters) | `GET /api/v1/search/facets` | Customer Bearer | **Connected Endpoint**. Returns counts per brand, condition, and price bracket. |
-| **Preview Match Count** | `SearchTab` (Filter drawer button) | `POST /api/v1/search/preview-count` | Customer Bearer | **Connected Endpoint**. Pre-calculates result count before applying filter drawer. |
-| **Search History Retrieval** | `WatchSearchController.loadSearchHistory()` | `GET /api/v1/search/recent` | Customer Bearer | **Connected Endpoint**. Fetches 10 recent searches stored for current user. |
-| **Clear Search History** | `WatchSearchController.clearHistory()` | `DELETE /api/v1/search/recent` | Customer Bearer | **Connected Endpoint**. Deletes user recent search query history. |
-| **Local SQLite Fallback Search** | `WatchSearchController.executeSearch()` | **No endpoint for that** | Local SQLite | **No endpoint for that**. Executes offline full-text SQL queries against `listings` table when network is unavailable or in demo mode. |
+-- 3. Bookmarks Table
+CREATE TABLE bookmarks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  listing_id INTEGER NOT NULL
+);
 
----
+-- 4. Saved Searches Table
+CREATE TABLE saved_searches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  query_text TEXT NOT NULL,
+  filters_json TEXT
+);
 
-### 4. Search Quota & Monthly Tier Limitations
+-- 5. Alerts Table
+CREATE TABLE alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  is_read INTEGER DEFAULT 0
+);
 
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Check Monthly Search Quota** | `WatchSearchController.checkSearchLimit()` | `GET /api/v1/subscriptions/me/usage` | Customer Bearer | **Connected Endpoint**. Returns current monthly searches performed versus plan limit. |
-| **Enforce 5 Searches/mo Free** | `WatchSearchController.monthlySearchCount` | `GET /api/v1/subscriptions/me/usage` | Customer Bearer | **Connected Endpoint**. Checks if `count >= 5` on Free tier. |
-| **Upgrade Modal Dialog** | `WatchSearchController._buildUpgradeDialog()` | **No endpoint for that** | Local UI Modal | **No endpoint for that**. Custom Flutter modal prompting user to upgrade to Premium ($29/mo) after 5 searches. |
-
----
-
-### 5. Saved Searches & Search Alerts
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Fetch Saved Searches** | `BookmarkController.fetchSavedSearches()` | `GET /api/v1/saved-searches` | Customer Bearer | **Connected Endpoint**. Returns saved searches with filters, chips, and alert status. |
-| **Save Search Query & Filters**| `BookmarkController.saveSearch()` | `POST /api/v1/saved-searches` | Customer Bearer | **Connected Endpoint**. Saves query string with JSON filter configuration. |
-| **Run Saved Search** | `BookmarksTab` (Tap saved search card) | `POST /api/v1/saved-searches/:savedSearchId/run` | Customer Bearer | **Connected Endpoint**. Re-runs the saved query and returns latest listings. |
-| **Enable Price Drop Alerts** | `BookmarksTab` (Alert bell icon toggle) | `POST /api/v1/saved-searches/:savedSearchId/alerts/enable` | Customer Bearer | **Connected Endpoint**. Enables notification push for price drops on this query. |
-| **Disable Search Alerts** | `BookmarksTab` (Alert bell icon toggle) | `POST /api/v1/saved-searches/:savedSearchId/alerts/disable` | Customer Bearer | **Connected Endpoint**. Disables notifications for this saved query. |
-| **Delete Saved Search** | `BookmarkController.removeSavedSearch()` | `DELETE /api/v1/saved-searches/:savedSearchId` | Customer Bearer | **Connected Endpoint**. Deletes saved search record from database. |
-| **Get Saved Search Matches** | `BookmarksTab` (Badge count matches) | `GET /api/v1/saved-searches/:savedSearchId/matches` | Customer Bearer | **Connected Endpoint**. Returns newly matching listings since last run. |
-
----
-
-### 6. Bookmarks & Watchlists
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Save / Bookmark Listing** | `BookmarkController.toggleBookmark()` | `POST /api/v1/listings/:listingId/save` | Customer Bearer | **Connected Endpoint**. Saves listing to user bookmarks. |
-| **Remove Bookmark** | `BookmarkController.toggleBookmark()` | `DELETE /api/v1/listings/:listingId/save` | Customer Bearer | **Connected Endpoint**. Removes listing from user bookmarks. |
-| **Get Saved Listings** | `BookmarkController.fetchBookmarks()` | `GET /api/v1/me/saved-listings` | Customer Bearer | **Connected Endpoint**. Retrieves full list of bookmarked watch listings. |
-| **Named Watchlists Management**| `BookmarksTab` / Watchlists | `GET /api/v1/watchlists` & `POST /api/v1/watchlists` | Customer Bearer | **Connected Endpoint**. Supports custom named folders/watchlists. |
-
----
-
-### 7. Watch Details, Market Metrics & Outbound Redirection
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Get Listing Full Details** | `WatchDetailScreen` (`watch_detail_screen.dart`)| `GET /api/v1/listings/:listingId` | Customer Bearer | **Connected Endpoint**. Fetches high-res photos, description, condition, and specs. |
-| **Get Similar Listings** | `WatchDetailScreen` (Similar carousel) | `GET /api/v1/listings/:listingId/similar` | Customer Bearer | **Connected Endpoint**. Fetches comparable listings of the same model. |
-| **Get Seller / Trader Profile**| `WatchDetailScreen` (Verified seller card) | `GET /api/v1/listings/:listingId/seller` | Customer Bearer | **Connected Endpoint**. Returns seller rating, verified badge, and location. |
-| **Record Listing View** | `WatchDetailScreen.initState()` | `POST /api/v1/listings/:listingId/view` | Customer Bearer | **Connected Endpoint**. Increments listing views for demand tracking. |
-| **Report Suspicious Listing** | `WatchDetailScreen` (Report option) | `POST /api/v1/listings/:listingId/report` | Customer Bearer | **Connected Endpoint**. Submits listing report for counterfeit / fraudulent items. |
-| **Contact Seller / Inquiry** | `WatchDetailScreen` (Message seller button) | `POST /api/v1/listings/:listingId/contact-seller` | Customer Bearer | **Connected Endpoint**. Sends inquiry message to the watch seller. |
-| **Marketplace Outbound Link** | `WatchDetailScreen._simulatePlatformRedirect()` | `GET /api/v1/listings/:listingId/outbound-link` | Customer Bearer | **Connected Endpoint**. Generates affiliate/tracked external redirect URL to eBay, Chrono24, or Grailzee. |
-| **Parallax Hero Image Effect** | `WatchDetailScreen._onScroll()` | **No endpoint for that** | Client UI Animation | **No endpoint for that**. Custom Flutter `ScrollController` listener calculating offset * 0.4 for smooth image parallax. |
-| **Animated Price Counter Ticker** | `WatchDetailScreen._priceCountAnimation` | **No endpoint for that** | Client UI Animation | **No endpoint for that**. `AnimationController` ticking price numbers upward using `Curves.easeOutCubic`. |
-
----
-
-### 8. Price Trend Curves & Market Analytics
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Model Market Summary** | `WatchDetailScreen` & `SearchTab` | `GET /api/v1/watch-models/:watchModelId/market-summary` | Customer Bearer | **Connected Endpoint**. Returns lowest, highest, and average market price. |
-| **Monthly Price Trend History**| `CustomPriceChart` (`custom_chart.dart`) | `GET /api/v1/analytics/watch-models/:watchModelId/price-trend` | Customer Bearer | **Connected Endpoint**. Returns historical price points for rendering vector chart. |
-| **Listing Value Comparison** | `WatchDetailScreen` (Market Spread Badge) | `GET /api/v1/analytics/listings/:listingId/value-comparison` | Customer Bearer | **Connected Endpoint**. Compares current price against 90-day moving average. |
-| **Model Volatility & Liquidity**| `WatchDetailScreen` (Volatility Index) | `GET /api/v1/analytics/watch-models/:watchModelId/volatility` | Customer Bearer | **Connected Endpoint**. Returns liquidity rating and price volatility score. |
-| **Cubic Bezier CustomPainter** | `PriceTrendPainter` (`custom_chart.dart`) | **No endpoint for that** | Client Vector Engine | **No endpoint for that**. Handcrafted Flutter `CustomPainter` calculating cubic Bezier control points and gradients locally. |
-
----
-
-### 9. Visual Watch Image Search & AI Detection
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Request Image Upload URL** | `ImageSearchScreen` (Camera shutter tap) | `POST /api/v1/image-search/upload-url` | Customer Bearer | **Connected Endpoint**. Issues presigned S3 URL for photo upload. |
-| **Execute Visual AI Search** | `ImageSearchScreen` (Search trigger) | `POST /api/v1/image-search` | Customer Bearer | **Connected Endpoint**. Generates visual embeddings and finds nearest watch models. |
-| **Fetch Image Search Results** | `ImageSearchScreen` (Results grid) | `GET /api/v1/image-search/:searchId/results` | Customer Bearer | **Connected Endpoint**. Returns matched listings ranked by similarity score. |
-| **Recent Image Search Scans** | `ImageSearchScreen` (Recent scans strip) | `GET /api/v1/image-search/recent` | Customer Bearer | **Connected Endpoint**. Returns history of user camera watch scans. |
-| **Submit AI Search Feedback** | `ImageSearchScreen` (Accuracy feedback) | `POST /api/v1/image-search/:searchId/feedback` | Customer Bearer | **Connected Endpoint**. Allows user to confirm or correct identified model. |
-| **Auto-Detect Listing Specs** | `MyListingsScreen` (Photo auto-fill) | `POST /api/v1/listings/:listingId/auto-detect` | Customer Bearer | **Connected Endpoint**. Extracts brand, model, and year from watch dial photo. |
-| **Local Simulated Image Asset** | `WatchSearchController.runSimulatedImageSearch()` | **No endpoint for that** | Local Mock Asset | **No endpoint for that**. Uses bundled assets (e.g. `assets/images/watches/rolex.jpg`) for demo testing. |
-
----
-
-### 10. Push Notifications, Price Drop & Listing Alerts
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Fetch Notification Feed** | `AlertController.fetchAlerts()` (`alerts_tab.dart`)| `GET /api/v1/notifications` | Customer Bearer | **Connected Endpoint**. Returns user alerts for price drops, sales, and new listings. |
-| **Unread Notification Count** | `AlertController.unreadCount` / `CustomNavbar` | `GET /api/v1/notifications/unread-count` | Customer Bearer | **Connected Endpoint**. Powers red badge indicator on bottom navigation bar. |
-| **Mark Notification as Read** | `AlertController.markAsRead()` | `POST /api/v1/notifications/:notificationId/read` | Customer Bearer | **Connected Endpoint**. Marks single alert read on server. |
-| **Mark All Notifications Read**| `AlertController.markAllAsRead()` | `POST /api/v1/notifications/read-all` | Customer Bearer | **Connected Endpoint**. Clears all unread badges across the account. |
-| **Delete Notification Item** | `AlertController.deleteAlert()` | `DELETE /api/v1/notifications/:notificationId` | Customer Bearer | **Connected Endpoint**. Permanently deletes alert from user feed. |
-| **Real-Time Notification Stream**| `AlertController` SSE Listener | `GET /api/v1/notifications/stream` | Customer Bearer | **Connected Endpoint**. Server-Sent Events (SSE) stream for real-time alerts. |
-| **Register FCM/APNS Push Token**| `main.dart` Device Registration | `POST /api/v1/devices` | Customer Bearer | **Connected Endpoint**. Registers mobile device push notification token. |
-| **Simulated Price Drop Trigger**| `AlertController.triggerSimulatedPriceDropAlert()`| **No endpoint for that** | Local Demo Simulator | **No endpoint for that**. Client-side test method inserting fake price drops into local SQLite `alerts` table. (In production, executed by backend worker `src/workers/run.ts`). |
-
----
-
-### 11. Peer-to-Peer Marketplace & Trader Listings
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Browse Trader Collections** | `TradersCollectionsScreen` (`traders_collections_screen.dart`)| `GET /api/v1/trader-collection` | Customer Bearer | **Connected Endpoint**. Fetches peer-to-peer watch listings published in-app. |
-| **Featured Trader Highlights** | `HomeTab` (Featured Trader Carousel) | `GET /api/v1/trader-collection/featured` | Customer Bearer | **Connected Endpoint**. Returns featured certified peer traders. |
-| **Create In-App Watch Listing** | `MyListingsScreen._showAddListingSheet()` | `POST /api/v1/listings` | Customer Bearer | **Connected Endpoint**. Submits new listing (brand, model, title, price, year, condition, location). |
-| **Upload Listing Images** | `MyListingsScreen` Image Uploader | `POST /api/v1/listings/:listingId/images/upload-urls` | Customer Bearer | **Connected Endpoint**. Requests S3 presigned upload URLs for listing gallery. |
-| **Confirm Listing Images** | `MyListingsScreen` Image Confirmer | `POST /api/v1/listings/:listingId/images/confirm` | Customer Bearer | **Connected Endpoint**. Confirms image upload keys in S3. |
-| **Submit Listing for Approval**| `MyListingsScreen` | `POST /api/v1/listings/:listingId/submit` | Customer Bearer | **Connected Endpoint**. Moves listing from Draft to Pending Review. |
-| **Publish Listing** | `MyListingsScreen` | `POST /api/v1/listings/:listingId/publish` | Customer Bearer | **Connected Endpoint**. Publishes listing directly to the active marketplace. |
-| **Fetch My Active Listings** | `MyListingsScreen` (Active tab) | `GET /api/v1/me/listings/active` | Customer Bearer | **Connected Endpoint**. Retrieves listings published by current user. |
-| **Fetch My Sold Listings** | `MyListingsScreen` (Sold tab) | `GET /api/v1/me/listings/sold` | Customer Bearer | **Connected Endpoint**. Retrieves sold items published by current user. |
-| **Mark Listing as Sold** | `WatchSearchController.buyListing()` | `POST /api/v1/listings/:listingId/mark-sold` | Customer Bearer | **Connected Endpoint**. Updates listing state to Sold. |
-| **Reserve / Hold Listing** | Peer Trade Negotiation | `POST /api/v1/listings/:listingId/reserve` | Customer Bearer | **Connected Endpoint**. Temporarily reserves listing during pending buyer payment. |
-
----
-
-### 12. In-App Purchasing, Orders & Invoicing
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Buy Peer Listing (Create Order)**| `WatchDetailScreen._showBuyConfirmSheet()` | `POST /api/v1/orders` | Customer Bearer | **Connected Endpoint**. Creates an in-app purchase order and marks listing as sold. |
-| **Get Order Details** | Order Confirmation View | `GET /api/v1/orders/:orderId` | Customer Bearer | **Connected Endpoint**. Returns order details, escrow status, and tracking numbers. |
-| **Get User Purchase Orders** | `ProfileTab` / Order History | `GET /api/v1/me/orders` | Customer Bearer | **Connected Endpoint**. Lists user purchase transactions. |
-| **Order Payment Intent** | In-app Checkout Screen | `POST /api/v1/orders/:orderId/payment-intent` | Customer Bearer | **Connected Endpoint**. Creates Stripe payment intent for luxury watch escrow. |
-| **Confirm Shipment** | `MyListingsScreen` (Sold item shipping) | `POST /api/v1/orders/:orderId/confirm-shipment` | Customer Bearer | **Connected Endpoint**. Seller inputs insured courier tracking code. |
-| **Confirm Delivery** | Buyer Confirmation View | `POST /api/v1/orders/:orderId/confirm-delivery` | Customer Bearer | **Connected Endpoint**. Buyer verifies receipt and releases escrow payout. |
-| **Custom Peer Invoice Generation**| `MyListingsScreen._showGenerateInvoiceDialog()` | **No endpoint for that** | Local SQLite | **No endpoint for that**. Generates custom invoice record (`buyer_name`, `buyer_email`, `invoice_no`, `date`, `price`) stored in SQLite `invoices` table. *Backend has subscription invoices at `GET /api/v1/subscriptions/invoices`, but lacks a custom P2P trade invoice generator endpoint.* |
-| **Invoice PDF Export & Print** | `InvoicePreviewScreen._simulateExport()` | **No endpoint for that** | Client PDF / Print | **No endpoint for that**. Renders formal invoice view and simulates OS print / PDF export locally. |
-
----
-
-### 13. Subscriptions, Tier Access & Stripe Billing
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **List Available Plans** | `SubscriptionPlansScreen` (`subscription_plans_screen.dart`)| `GET /api/v1/subscriptions/plans` | Public | **Connected Endpoint**. Returns Free ($0), Premium ($29/mo), and VIP ($49/mo) plans. |
-| **Get User Active Subscription**| `ProfileTab` (Current Plan Gauge) | `GET /api/v1/subscriptions/me` | Customer Bearer | **Connected Endpoint**. Returns active tier, billing cycle, and expiration. |
-| **Create Stripe Checkout Session**| `SubscriptionPlansScreen` (Upgrade button) | `POST /api/v1/subscriptions/checkout-session` | Customer Bearer | **Connected Endpoint**. Generates Stripe hosted checkout session for subscription. |
-| **Customer Billing Portal** | `ProfileTab` (Manage Billing) | `POST /api/v1/subscriptions/portal-session` | Customer Bearer | **Connected Endpoint**. Opens Stripe Customer Portal for card and payment management. |
-| **Change / Upgrade Plan** | `AuthController.upgradePlan()` | `POST /api/v1/subscriptions/change-plan` | Customer Bearer | **Connected Endpoint**. Upgrades plan tier and computes prorated billing. |
-| **Cancel Subscription** | `SubscriptionPlansScreen` (Cancel tier) | `POST /api/v1/subscriptions/cancel` | Customer Bearer | **Connected Endpoint**. Cancels recurring subscription at period end. |
-| **Get Subscription Invoices** | `ProfileTab` (Billing History) | `GET /api/v1/subscriptions/invoices` | Customer Bearer | **Connected Endpoint**. Returns PDF invoice history for membership fees. |
-| **Local Payment History Log** | `AuthController.upgradePlan()` | **No endpoint for that** | Local SQLite | **No endpoint for that**. Inserts local record into SQLite `payment_history` table for offline verification. |
-
----
-
-### 14. Organizations Radar Map & Service Centers
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Rotating Radar Search Beam** | `MapTab` (`map_tab.dart`) | **No endpoint for that** | Client Vector Painter | **No endpoint for that**. Animated radial sweep custom-drawn with Flutter `CustomPainter`. |
-| **Service Centers & Dealers Pins**| `MapController._loadProviders()` (`map_controller.dart`)| **No endpoint for that** | Hardcoded Mock Data | **No endpoint for that**. Currently hardcodes 4 service centers/dealers with `dx`, `dy`, `phone`, and `address`. *Backend currently lacks `/api/v1/organizations` or `/api/v1/service-centers` API endpoint.* |
-| **Provider Detail Callout Card** | `MapTab` (Tap pin on radar) | **No endpoint for that** | Local Client State | **No endpoint for that**. Opens provider contact details bottom sheet locally. |
-
----
-
-### 15. Social Sharing & Listing Export
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Share via WhatsApp** | `WatchDetailScreen._buildShareOption()` | **No endpoint for that** | Client OS Intent | **No endpoint for that**. Native URL scheme `whatsapp://send?text=...`. |
-| **Share via Facebook** | `WatchDetailScreen._buildShareOption()` | **No endpoint for that** | Client OS Intent | **No endpoint for that**. Native Facebook sharing intent. |
-| **Share via Messenger** | `WatchDetailScreen._buildShareOption()` | **No endpoint for that** | Client OS Intent | **No endpoint for that**. Native Messenger URL scheme. |
-| **Copy Listing Link to Clipboard**| `WatchDetailScreen._buildShareOption()` | **No endpoint for that** | Flutter Clipboard | **No endpoint for that**. `Clipboard.setData(ClipboardData(text: ...))`. |
-
----
-
-### 16. Admin Dashboard, Platform Toggles & System Diagnostics
-
-| App Feature / Function | Mobile Implementation (`lib/`) | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Admin Panel Authentication** | `AdminDashboard` (`admin_dashboard.dart`) | `POST /api/v1/admin/auth/login` | Admin Public | **Connected Endpoint**. Authenticates administrative credentials and returns admin JWT. |
-| **Admin Dashboard Summary** | `AdminDashboard` (Top metric cards) | `GET /api/v1/admin/dashboard/summary` | Admin Bearer | **Connected Endpoint**. Returns aggregated user count, revenue trends, and search volumes. |
-| **Admin List All Users** | `AdminController.fetchUsers()` | `GET /api/v1/admin/users` | Admin Bearer | **Connected Endpoint**. Returns all users with plan tiers and status. |
-| **Admin Update User Details** | `AdminController.updateUser()` | `PATCH /api/v1/admin/users/:userId/profile` | Admin Bearer | **Connected Endpoint**. Updates user roles, email, or profile attributes. |
-| **Admin Deactivate / Suspend User**| `AdminController.updateUser(status: 'inactive')`| `PATCH /api/v1/admin/users/:userId/status` | Admin Bearer | **Connected Endpoint**. Activates, suspends, or deactivates user accounts. |
-| **List Marketplace Integrations** | `AdminDashboard` (Marketplace status) | `GET /api/v1/admin/marketplaces` | Admin Bearer | **Connected Endpoint**. Returns eBay, Chrono24, and Grailzee sync status. |
-| **Globally Toggle eBay** | `AdminController.toggleEbay()` | `POST /api/v1/admin/marketplaces/:marketplaceId/enable` / `disable` | Admin Bearer | **Connected Endpoint**. Controls platform ingestion globally. |
-| **Globally Toggle Chrono24** | `AdminController.toggleChrono24()` | `POST /api/v1/admin/marketplaces/:marketplaceId/enable` / `disable` | Admin Bearer | **Connected Endpoint**. Controls platform ingestion globally. |
-| **Globally Toggle Grailzee** | `AdminController.toggleGrailzee()` | `POST /api/v1/admin/marketplaces/:marketplaceId/enable` / `disable` | Admin Bearer | **Connected Endpoint**. Controls platform ingestion globally. |
-| **List Platform Feature Toggles** | `AdminDashboard` (Feature toggles) | `GET /api/v1/admin/settings/features` | Admin Bearer | **Connected Endpoint**. Returns global feature flags (image search, ads, volatility). |
-| **Toggle Feature (Image Search/Ads)**| `AdminController.toggleImageSearch() / toggleAds()` | `PATCH /api/v1/admin/settings/features/:featureKey` | Admin Bearer | **Connected Endpoint**. Persists platform feature flags dynamically. |
-| **Edit Premium Plan Pricing** | `AdminController.editPremiumPrice()` | `PATCH /api/v1/admin/subscriptions/plans/:planId` | Admin Bearer | **Connected Endpoint**. Updates subscription tier pricing on the server. |
-| **Admin Financial Transactions Log**| `AdminController.fetchPaymentHistory()` | `GET /api/v1/admin/earnings/transactions` | Admin Bearer | **Connected Endpoint**. Returns transaction receipts, payouts, and customer details. |
-| **Server Health & Uptime** | `AdminDashboard` (Diagnostics) | `GET /health` | Public | **Connected Endpoint**. Returns server status, uptime seconds, and health checks. |
-| **Admin Audit Logs** | `AdminDashboard` (System logs) | `GET /api/v1/admin/audit-logs` | Admin Bearer | **Connected Endpoint**. Returns security audit trail logs. |
-| **Simulated CPU & RAM Gauges** | `AdminDashboard` (`cpuUsage`, `ramUsage`) | **No endpoint for that** | Client Timer Simulation | **No endpoint for that**. Animated fluctuating CPU/RAM gauges in Flutter UI. *(Can bind to `/health` or infrastructure metrics in production)*. |
-
----
-
-### 17. Automation & Social Media Campaigns
-
-*(Documented in the project specification PDF: `modevin __ WatchSphere Mobile Application __ Locked Featues 1.pdf`)*
-
-| App Feature / Function | Specification Reference | Backend API Endpoint | Auth Type | Status & Implementation Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Facebook Group Posting** | Automation Module Section 3.1 | `POST /api/v1/admin/campaigns/:campaignId/posts` | Admin Bearer | **Connected Endpoint**. Schedules automated luxury watch posts to Facebook groups via approved APIs. |
-| **Post Scheduling** | Automation Module Section 3.2 | `POST /api/v1/admin/bulk-email/campaigns/:campaignId/schedule` / `campaigns` | Admin Bearer | **Connected Endpoint**. Schedules automated posts for future release. |
-| **Campaign Management** | Automation Module Section 3.3 | `GET /api/v1/admin/campaigns` & `POST /api/v1/admin/campaigns` | Admin Bearer | **Connected Endpoint**. Manages luxury watch promotional campaigns. |
-| **Post Performance Analytics**| Automation Module Section 3.4 | `GET /api/v1/admin/campaigns/:campaignId/analytics` | Admin Bearer | **Connected Endpoint**. Tracks engagement, clicks, impressions, and views. |
-
----
-
-## ⚠️ Summary of Features with "NO ENDPOINT FOR THAT"
-
-The following table summarizes all client-side, local SQLite, or third-party features in the Flutter application that **do not currently have a dedicated backend REST endpoint**, along with the architectural recommendation for full cloud integration:
-
-| Feature Name | Current App Implementation | Why There Is No Endpoint | Recommended Future Backend Endpoint |
-| :--- | :--- | :--- | :--- |
-| **1. Organizations Radar Map** | `MapController._loadProviders()` in `map_controller.dart` | Markers are hardcoded locally in Dart (`dx`, `dy`, phone, address). No backend API exists for physical service centers or authorized dealer locations. | `GET /api/v1/organizations`<br>`GET /api/v1/service-centers`<br>`POST /api/v1/organizations` (Admin) |
-| **2. Custom Peer Billing Invoice Generator** | `MyListingsScreen._showGenerateInvoiceDialog()` & `invoice_preview_screen.dart` | Custom invoice data (`buyer_name`, `buyer_email`, `invoice_no`, `date`, `price`) is stored in local SQLite `invoices` table. Backend has subscription invoices (`/subscriptions/invoices`) but no P2P sale invoice generator. | `POST /api/v1/orders/:orderId/invoices`<br>`GET /api/v1/orders/:orderId/invoice-pdf` |
-| **3. Invoice PDF Export & Printing** | `InvoicePreviewScreen._simulateExport()` in `invoice_preview_screen.dart` | PDF generation and printer spooling are simulated with client-side timers. | `GET /api/v1/invoices/:invoiceId/download-pdf` |
-| **4. Developer Test Login Bypass** | `LoginScreen._submit()` in `login_screen.dart` | Allows instant bypass by typing any username and selecting User/Admin and Free/Paid. Directly modifies local SQLite `users` table. | *Keep client-side for debug builds only.* |
-| **5. Cubic Bezier Trend Line Drawing** | `PriceTrendPainter` in `custom_chart.dart` | Handcrafted Flutter vector mathematics calculating spline curves and gradients. | *Client-side rendering.* (Data supplied via `GET /api/v1/analytics/watch-models/:watchModelId/price-trend`). |
-| **6. Splash Watermarks & Onboarding Pager** | `SplashScreen` & `OnboardingScreen` | Local animations, custom painters, and `shared_preferences` onboarding completion flags. | *Client-side presentation layer.* |
-| **7. Hero Image Parallax & Price Counter** | `WatchDetailScreen` | Smooth scrolling parallax offset and ticker animation controllers. | *Client-side presentation layer.* |
-| **8. Native Social Sharing** | `WatchDetailScreen._showShareSheet()` | Uses OS intents and deep links for WhatsApp, Facebook, and Messenger. | *Client-side OS sharing integration.* |
-| **9. Simulated Price Drop Alert Generator** | `AlertController.triggerSimulatedPriceDropAlert()` | Test button inserting simulated price drops into local SQLite `alerts` table. | *Client-side demo simulation.* (Production alerts generated by server worker `src/workers/run.ts`). |
-| **10. Admin Simulated CPU / RAM Gauges** | `AdminController._startSimulatedDiagnostics()` | Fluctuating hardware gauge numbers generated by client-side timer. | `GET /api/v1/admin/system/metrics` (or bind to existing `/health` checks). |
-
----
-
-## 🗄️ Local SQLite Database Architecture (`watch_sphere.db`)
-
-When the mobile app starts without network access or in standalone test mode, `DbHelper` (`lib/core/db/db_helper.dart`) automatically initializes an embedded SQLite database (`watch_sphere.db`) with 8 relational tables:
-
-```mermaid
-erDiagram
-    users ||--o{ bookmarks : saves
-    users ||--o{ saved_searches : registers
-    users ||--o{ search_history : queries
-    users ||--o{ alerts : receives
-    users ||--o{ payment_history : pays
-    users ||--o{ listings : owns
-    listings ||--o{ bookmarks : bookmarked
-    listings ||--o{ invoices : bills
+-- 6. Invoices Table
+CREATE TABLE invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  listing_id INTEGER NOT NULL,
+  buyer_name TEXT NOT NULL,
+  buyer_email TEXT NOT NULL,
+  invoice_no TEXT NOT NULL,
+  date TEXT NOT NULL,
+  price REAL NOT NULL
+);
 ```
 
-### Table Schemas:
-1. **`users`**: `id (INTEGER PK)`, `name (TEXT)`, `role (TEXT: user/admin)`, `plan (TEXT: free/paid)`, `status (TEXT: active/inactive)`
-2. **`listings`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `title (TEXT)`, `brand (TEXT)`, `model (TEXT)`, `price (REAL)`, `platform (TEXT: Chrono24/eBay/Grailzee/In-App)`, `year (INTEGER)`, `condition (TEXT)`, `location (TEXT)`, `is_sold (INTEGER)`, `timestamp (TEXT)`
-3. **`bookmarks`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `listing_id (INTEGER FK)`
-4. **`saved_searches`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `query_text (TEXT)`, `filters_json (TEXT)`
-5. **`search_history`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `query_text (TEXT)`, `timestamp (TEXT)`
-6. **`alerts`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `type (TEXT: price_drop/new_listing)`, `message (TEXT)`, `timestamp (TEXT)`, `is_read (INTEGER)`
-7. **`payment_history`**: `id (INTEGER PK)`, `user_id (INTEGER FK)`, `amount (REAL)`, `date (TEXT)`, `plan_name (TEXT)`
-8. **`invoices`**: `id (INTEGER PK)`, `listing_id (INTEGER FK)`, `buyer_name (TEXT)`, `buyer_email (TEXT)`, `invoice_no (TEXT)`, `date (TEXT)`, `price (REAL)`
-
 ---
 
-## 🚀 Getting Started & Local Execution
+## 🚀 Prerequisites & Getting Started
 
-### 1. Prerequisites
-- **Flutter SDK:** `^3.44.0`
-- **Dart SDK:** `^3.12.1`
-- **Node.js (Backend):** `>=22.11.0`
+### 1. Mobile App Execution (Flutter)
 
-### 2. Running the Flutter Mobile App
+#### Prerequisites
+- **Flutter SDK:** `>=3.44.0` (Channel stable)
+- **Dart SDK:** `>=3.12.1`
+- **Android Studio / Xcode:** For emulator or physical device testing
+
+#### Steps
 ```bash
-# Navigate to the mobile application directory
-cd d:/nahid/the_watch_box/the_watch_box
+# 1. Clone repository
+git clone https://github.com/nahidshuvo1802/watch-box.git
+cd watch-box
 
-# Install Flutter dependencies
+# 2. Install Flutter packages
 flutter pub get
 
-# Run test suite
-flutter test
+# 3. Verify Flutter setup
+flutter doctor
 
-# Launch mobile application (Chrome Web, iOS Simulator, Android Emulator, or Desktop)
+# 4. Launch on connected device or emulator
 flutter run
 ```
 
-### 3. Starting the Backend API Server
+---
+
+### 2. Backend Service Execution (Node.js & Docker)
+
+#### Prerequisites
+- **Node.js:** `>=22.11.0`
+- **Docker Desktop:** Running (for MongoDB, Redis, and RabbitMQ containers)
+
+#### Steps
 ```bash
-# Navigate to backend repository
+# 1. Navigate to backend project directory
 cd d:/nahid/watchBox-Backend
 
-# Ensure local environment variables
-npm run predev
+# 2. Start backing services via Docker Compose
+npm run docker:up
 
-# Start API dev server on http://localhost:4000
+# 3. Install npm packages
+npm install
+
+# 4. Start backend in development mode
 npm run dev
 ```
+> The API server will boot up at `http://localhost:4000`. RabbitMQ Management is accessible at `http://localhost:15672` (User: `watchbox`, Pass: `change-me`).
 
-### 4. Importing the Postman API Collection
-1. Open **Postman**.
-2. Click **Import** (top left).
-3. Select the file: [`collection.json`](file:///d:/nahid/the_watch_box/the_watch_box/collection.json).
-4. Select the **WatchBox Environment** or set `baseUrl = http://localhost:4000`.
-5. Execute `POST /api/v1/auth/login` to automatically populate your `{{accessToken}}` and start making API requests!
+---
+
+### 3. Environment Variables Configuration
+
+#### Backend `.env` Settings:
+```env
+PORT=4000
+API_PREFIX=/api/v1
+MONGODB_URI=mongodb://localhost:27017/watchbox
+REDIS_URL=redis://default:change-me@localhost:6379
+RABBITMQ_URL=amqp://watchbox:change-me@localhost:5672/watchbox
+
+# eBay Developer Integration
+EBAY_CLIENT_ID=your-ebay-app-id
+EBAY_CLIENT_SECRET=your-ebay-cert-id
+EBAY_REDIRECT_URI=https://api.mywatchbox.net/api/v1/ebay/oauth/callback
+EBAY_ENVIRONMENT=PRODUCTION
+
+# Stripe Payments
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Gemini AI Vision
+GEMINI_API_KEY=AIzaSy...
+```
+
+#### Flutter App Base URL Configuration:
+In [`lib/core/prefs/pref_manager.dart`](file:///d:/nahid/the_watch_box/the_watch_box/lib/core/prefs/pref_manager.dart), the application automatically resolves the base URL:
+- **Production Server:** `https://api.mywatchbox.net/api/v1`
+- **Android Emulator Localhost:** `http://10.0.2.2:4000/api/v1`
+- **iOS Simulator / Desktop / Web:** `http://localhost:4000/api/v1`
+
+---
+
+## 🧪 Quality Assurance & Testing
+
+```bash
+# Run all unit and controller tests
+flutter test
+
+# Verify static analysis & linter rules
+flutter analyze
+```
+
+---
+
+## 📄 License & Attribution
+
+This project is licensed under the MIT License - see the [LICENSE](file:///d:/nahid/the_watch_box/the_watch_box/LICENSE) file for details.
+
+Developed with ❤️ by **Nahid Khan Shuvo** and the Horology Engineering Team.
+For inquiries, partnership, or API access, contact: `nahid.sparktech@gmail.com`.
